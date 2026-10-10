@@ -31,8 +31,9 @@ param microsoftAuthClientSecret string
 @description('Microsoft Entra tenant containing the authorized user or guest account.')
 param microsoftTenantId string = tenant().tenantId
 
-@description('Microsoft Entra object ID of the only user authorized to access the application.')
-param allowedPrincipalId string
+@minLength(1)
+@description('Microsoft Entra object IDs authorized to access the application.')
+param allowedPrincipalIds array
 
 @description('Only this Microsoft account email may access the application.')
 param allowedEmail string = 'jparus@gmail.com'
@@ -124,8 +125,8 @@ resource app 'Microsoft.Web/sites@2023-12-01' = {
           value: allowedEmail
         }
         {
-          name: 'APP_ALLOWED_PRINCIPAL_ID'
-          value: allowedPrincipalId
+          name: 'APP_ALLOWED_PRINCIPAL_IDS'
+          value: join(allowedPrincipalIds, ',')
         }
       ]
     }

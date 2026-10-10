@@ -8,7 +8,7 @@ Dishwasher Loop is a small Node.js service that:
 - persists status, event, and notification messages;
 - shows current appliance diagnostics, salt and rinse-aid warnings, and the
   latest 200 events in a server-rendered UI; and
-- protects the Azure-hosted UI with Microsoft sign-in and a single-user
+- protects the Azure-hosted UI with Microsoft sign-in and an explicit user
   allowlist.
 
 See the [end-to-end design](docs/design.md) for the architecture, authentication

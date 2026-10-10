@@ -16,9 +16,12 @@ export function requireAllowedMicrosoftUser(config) {
       response.status(401).type("text").send("Microsoft authentication is required.");
       return;
     }
-    const principalMatches = config.allowedPrincipalId
-      && identity.principalIds.includes(config.allowedPrincipalId);
-    const emailMatches = !config.allowedPrincipalId
+    const allowedPrincipalIds = config.allowedPrincipalIds
+      || (config.allowedPrincipalId ? [config.allowedPrincipalId] : []);
+    const principalMatches = allowedPrincipalIds.some(
+      (principalId) => identity.principalIds.includes(principalId.toLowerCase()),
+    );
+    const emailMatches = allowedPrincipalIds.length === 0
       && config.allowedEmail
       && identity.emails.includes(config.allowedEmail);
     if (!principalMatches && !emailMatches) {

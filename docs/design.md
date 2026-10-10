@@ -2,9 +2,9 @@
 
 ## 1. Purpose and scope
 
-Dishwasher Loop is a deliberately small, single-user service that receives
-dishwasher changes from the Home Connect cloud, stores them, and presents them
-in a minimal web UI.
+Dishwasher Loop is a deliberately small, explicitly allowlisted service that
+receives dishwasher changes from the Home Connect cloud, stores them, and
+presents them in a minimal web UI.
 
 The design optimizes for:
 
@@ -169,11 +169,30 @@ boundary.
 4. Easy Auth validates the response, creates its session, and injects trusted
    identity headers into requests forwarded to Node.
 5. Node extracts the immutable Entra principal/object ID.
-6. Node allows the request only when that ID equals
-   `APP_ALLOWED_PRINCIPAL_ID`.
+6. Node allows the request only when that ID appears in the comma-separated
+   `APP_ALLOWED_PRINCIPAL_IDS` setting.
 
 The Node check is defense in depth. A different Microsoft user who successfully
 authenticates still receives HTTP 403.
+
+#### Managing authorized users
+
+The allowlist is a comma-separated App Service setting generated from the
+`allowedPrincipalIds` Bicep array. To add a user:
+
+1. Ensure the account exists as a member or guest in the application tenant.
+   Invite an external account through **Entra ID → Users → New user → Invite
+   external user** and have the recipient accept the invitation.
+2. Copy the user's tenant-local **Object ID** from Entra. Do not use an email
+   address or an object ID from another tenant.
+3. Append the Object ID to the Bicep deployment's `allowedPrincipalIds` array,
+   preserving all existing IDs.
+4. Apply the Bicep deployment to update `APP_ALLOWED_PRINCIPAL_IDS`.
+
+The Node application accepts any exact Object ID in the list. Removing an ID
+and reapplying Bicep revokes that user's access. The legacy singular
+`APP_ALLOWED_PRINCIPAL_ID` setting remains readable during migration but is no
+longer emitted by the template.
 
 The Entra app registration must:
 
@@ -350,7 +369,7 @@ The Bicep deployment outputs:
 | Home Connect developer application | Home Connect portal | Supplies API client ID/secret and registered appliance callback |
 | Microsoft Entra interactive app registration | Entra | Authenticates the browser through Easy Auth |
 | Microsoft Entra interactive service principal | Entra | Tenant-local representation of the interactive app |
-| Entra user/guest object | Entra | Immutable principal ID authorized by Node |
+| Entra user/guest objects | Entra | Immutable principal IDs authorized by Node |
 | Azure Table `DishwasherLoop` | Application startup | Stores OAuth settings and event entities |
 | GitHub deployment app registration | Azure CLI setup | Trust anchor for GitHub OIDC |
 | GitHub deployment service principal | Azure CLI setup | Receives Website Contributor role |
@@ -369,7 +388,7 @@ The Bicep deployment outputs:
 | `AZURE_TABLE_NAME` | Table name | No |
 | `MICROSOFT_PROVIDER_AUTHENTICATION_SECRET` | Easy Auth Entra client secret | Yes |
 | `REQUIRE_MICROSOFT_AUTH` | Enables Node's identity-header validation | No |
-| `APP_ALLOWED_PRINCIPAL_ID` | Authorized immutable Entra object ID | No |
+| `APP_ALLOWED_PRINCIPAL_IDS` | Comma-separated immutable Entra object IDs | No |
 | `APP_ALLOWED_EMAIL` | Human-readable identity metadata/fallback | No |
 | `HOME_CONNECT_EVENT_TYPES` | Optional persisted event classes | No |
 | `HOME_CONNECT_EVENT_KEYS` | Optional persisted item-key allowlist | No |
@@ -449,7 +468,8 @@ runtime code only.
 
 - Public traffic uses HTTPS; the Web App enforces TLS 1.2 or newer.
 - Easy Auth protects all routes except the data-free `/healthz`.
-- Node validates the immutable Entra principal ID supplied by Easy Auth.
+- Node validates that the immutable Entra principal ID supplied by Easy Auth is
+  in the explicit allowlist.
 - Home Connect OAuth uses a signed, expiring state cookie and timing-safe state
   comparison.
 - Home Connect access and refresh tokens are never sent to the browser.
@@ -462,7 +482,7 @@ runtime code only.
 
 ## 10. Intentional limitations
 
-- One user and one Home Connect account.
+- An explicit set of Entra users and one shared Home Connect account.
 - One App Service worker; no horizontal scale-out.
 - No event deduplication across independent processes.
 - No guarantee that every Home Connect mobile-app notification exists in the

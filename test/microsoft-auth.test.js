@@ -21,7 +21,7 @@ test("extracts and normalizes the email claim supplied by App Service", () => {
 test("allows only the configured Microsoft account", () => {
   const middleware = requireAllowedMicrosoftUser({
     requireMicrosoftAuth: true,
-    allowedPrincipalId: "",
+    allowedPrincipalIds: [],
     allowedEmail: "jparus@gmail.com",
   });
   let nextCalled = false;
@@ -40,7 +40,7 @@ test("allows only the configured Microsoft account", () => {
 test("rejects a different authenticated Microsoft account", () => {
   const middleware = requireAllowedMicrosoftUser({
     requireMicrosoftAuth: true,
-    allowedPrincipalId: "",
+    allowedPrincipalIds: [],
     allowedEmail: "jparus@gmail.com",
   });
   const response = fakeResponse();
@@ -56,7 +56,7 @@ test("rejects a different authenticated Microsoft account", () => {
 test("rejects requests without an App Service identity", () => {
   const middleware = requireAllowedMicrosoftUser({
     requireMicrosoftAuth: true,
-    allowedPrincipalId: "",
+    allowedPrincipalIds: [],
     allowedEmail: "jparus@gmail.com",
   });
   const response = fakeResponse();
@@ -72,7 +72,7 @@ test("rejects requests without an App Service identity", () => {
 test("authorizes the configured Entra principal ID instead of an unreliable guest email", () => {
   const middleware = requireAllowedMicrosoftUser({
     requireMicrosoftAuth: true,
-    allowedPrincipalId: "a8a21744-d15b-473c-8c50-aaa5c29bf189",
+    allowedPrincipalIds: ["a8a21744-d15b-473c-8c50-aaa5c29bf189"],
     allowedEmail: "jparus@gmail.com",
   });
   let nextCalled = false;
@@ -93,7 +93,7 @@ test("authorizes the configured Entra principal ID instead of an unreliable gues
 test("does not fall back to email when a principal ID allowlist is configured", () => {
   const middleware = requireAllowedMicrosoftUser({
     requireMicrosoftAuth: true,
-    allowedPrincipalId: "a8a21744-d15b-473c-8c50-aaa5c29bf189",
+    allowedPrincipalIds: ["a8a21744-d15b-473c-8c50-aaa5c29bf189"],
     allowedEmail: "jparus@gmail.com",
   });
   const response = fakeResponse();
@@ -106,6 +106,26 @@ test("does not fall back to email when a principal ID allowlist is configured", 
   }, response, () => assert.fail("Wrong principal ID reached the application"));
 
   assert.equal(response.statusCode, 403);
+});
+
+test("authorizes any principal in the configured allowlist", () => {
+  const middleware = requireAllowedMicrosoftUser({
+    requireMicrosoftAuth: true,
+    allowedPrincipalIds: [
+      "a8a21744-d15b-473c-8c50-aaa5c29bf189",
+      "second-user-object-id",
+    ],
+    allowedEmail: "",
+  });
+  let nextCalled = false;
+
+  middleware({
+    headers: { "x-ms-client-principal-id": "second-user-object-id" },
+  }, fakeResponse(), () => {
+    nextCalled = true;
+  });
+
+  assert.equal(nextCalled, true);
 });
 
 function fakeResponse() {
