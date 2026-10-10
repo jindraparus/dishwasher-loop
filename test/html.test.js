@@ -19,6 +19,10 @@ test("renders appliance metadata and current status diagnostics", () => {
         key: "BSH.Common.Status.OperationState",
         value: "BSH.Common.EnumType.OperationState.Run",
       }],
+      consumables: {
+        salt: { state: "ok", label: "Enough" },
+        rinseAid: { state: "low", label: "Refill soon" },
+      },
       statusError: "",
       lastEventType: "STATUS",
       lastEventAt: "2026-10-09T20:00:00.000Z",
@@ -29,4 +33,6 @@ test("renders appliance metadata and current status diagnostics", () => {
   assert.match(html, /Bosch · Dishwasher · SMV6/);
   assert.match(html, /Operation State/);
   assert.match(html, /BSH\.Common\.EnumType\.OperationState\.Run/);
+  assert.match(html, /<dt>Salt<\/dt><dd>Enough<\/dd>/);
+  assert.match(html, /<dt>Rinse aid<\/dt><dd>Refill soon<\/dd>/);
 });

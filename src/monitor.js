@@ -1,6 +1,11 @@
 import { AuthenticationRequiredError } from "./home-connect.js";
 import { consumeSse } from "./sse.js";
 
+const CONSUMABLE_EVENTS = {
+  "Dishcare.Dishwasher.Event.SaltNearlyEmpty": "salt",
+  "Dishcare.Dishwasher.Event.RinseAidNearlyEmpty": "rinseAid",
+};
+
 export class DishwasherMonitor {
   constructor(client, storage, logger = console, eventFilter = {}) {
     this.client = client;
@@ -91,10 +96,23 @@ export class DishwasherMonitor {
         connected: appliance.connected,
         statusItems,
         statusError,
+        consumables: {
+          salt: unknownConsumableStatus(),
+          rinseAid: unknownConsumableStatus(),
+        },
         lastEventType: "",
         lastEventAt: "",
       };
     }));
+
+    const recentEvents = await this.storage.listEvents(200);
+    for (const event of recentEvents.toReversed()) {
+      this.updateDiagnostics(event.applianceId, {
+        event: event.eventType,
+        data: event.data,
+        receivedAt: event.receivedAt,
+      });
+    }
   }
 
   async monitorAll(appliances, parentSignal) {
@@ -150,12 +168,20 @@ export class DishwasherMonitor {
 
     diagnostic.connected = true;
     diagnostic.lastEventType = message.event;
-    diagnostic.lastEventAt = new Date().toISOString();
-    if (message.event !== "STATUS" || !Array.isArray(message.data?.items)) {
+    diagnostic.lastEventAt = message.receivedAt || new Date().toISOString();
+    if (!Array.isArray(message.data?.items)) {
       return;
     }
 
     for (const item of message.data.items) {
+      const consumable = CONSUMABLE_EVENTS[item.key];
+      if (consumable) {
+        diagnostic.consumables[consumable] = consumableStatus(item.value);
+      }
+      if (message.event !== "STATUS") {
+        continue;
+      }
+
       const existingIndex = diagnostic.statusItems.findIndex(
         (statusItem) => statusItem.key === item.key,
       );
@@ -168,6 +194,27 @@ export class DishwasherMonitor {
   }
 }
 
+export function consumableStatus(value) {
+  if (value === false) {
+    return { state: "ok", label: "Enough" };
+  }
+  if (value === true) {
+    return { state: "low", label: "Refill soon" };
+  }
+
+  const state = String(value ?? "").split(".").at(-1).toLowerCase();
+  if (state === "off") {
+    return { state: "ok", label: "Enough" };
+  }
+  if (state === "present") {
+    return { state: "low", label: "Refill soon" };
+  }
+  if (state === "confirmed") {
+    return { state: "low", label: "Refill soon (warning acknowledged)" };
+  }
+  return unknownConsumableStatus();
+}
+
 export function shouldPersistEvent(message, filter) {
   if (!filter.types.includes(message.event.toUpperCase())) {
     return false;
@@ -177,6 +224,10 @@ export function shouldPersistEvent(message, filter) {
   }
   return Array.isArray(message.data?.items)
     && message.data.items.some((item) => filter.keys.includes(item.key));
+}
+
+function unknownConsumableStatus() {
+  return { state: "unknown", label: "Unknown - waiting for appliance event" };
 }
 
 function delay(milliseconds, signal) {

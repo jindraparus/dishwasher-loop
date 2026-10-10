@@ -49,8 +49,14 @@ export function renderPage({ events, authorized, monitorStatus, diagnostics, err
 }
 
 function renderDiagnostics(diagnostic) {
+  const salt = diagnostic.consumables?.salt?.label
+    || "Unknown - waiting for appliance event";
+  const rinseAid = diagnostic.consumables?.rinseAid?.label
+    || "Unknown - waiting for appliance event";
   const details = [
     ["Connection", diagnostic.connected === false ? "Offline" : "Online"],
+    ["Salt", salt],
+    ["Rinse aid", rinseAid],
     ...diagnostic.statusItems.map((item) => [formatKey(item.key), formatValue(item.value, item.unit)]),
   ];
   if (diagnostic.lastEventType) {
@@ -69,6 +75,7 @@ function renderDiagnostics(diagnostic) {
       [diagnostic.brand, diagnostic.type, diagnostic.model].filter(Boolean).join(" · "),
     )}</p>
     <dl>${details.map(([label, value]) => `<dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd>`).join("")}</dl>
+    <p class="metadata">Home Connect reports refill warnings, not exact consumable levels.</p>
   </section>`;
 }
 

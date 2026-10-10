@@ -154,7 +154,9 @@ access scoped only to the `jparusdishwasher` App Service resource.
 - Disconnecting removes OAuth tokens but intentionally preserves event history.
 - The UI refreshes every 30 seconds and shows the latest 200 stored events.
 - Diagnostics show appliance type/model, connectivity, current Home Connect
-  status values, and the most recent streamed event.
+  status values, salt/rinse-aid refill warnings, and the most recent streamed
+  event. Home Connect exposes warning thresholds, not exact consumable levels;
+  a value remains unknown until the appliance reports the corresponding event.
 - `AZURE_STORAGE_CONNECTION_STRING=local` and the legacy
   `UseDevelopmentStorage=true` setting both select local JSON-file storage.
 
