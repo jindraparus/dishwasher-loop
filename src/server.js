@@ -33,14 +33,35 @@ app.use(requireAllowedMicrosoftUser(config));
 
 app.get("/", async (request, response, next) => {
   try {
-    const [events, tokens] = await Promise.all([storage.listEvents(), storage.getTokens()]);
+    const [events, tokens, capsuleCount] = await Promise.all([
+      storage.listEvents(),
+      storage.getTokens(),
+      storage.getCapsuleCount(),
+    ]);
     response.type("html").send(renderPage({
       events,
       authorized: Boolean(tokens),
       monitorStatus: monitor.getStatus(),
       diagnostics: monitor.getDiagnostics(),
+      capsuleCount,
       error: typeof request.query.error === "string" ? request.query.error : "",
     }));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/supplies/capsules", async (request, response, next) => {
+  try {
+    const value = String(request.body.count || "").trim();
+    if (!/^\d{1,3}$/.test(value)) {
+      response.status(400).type("text").send(
+        "Capsule count must be a whole number between 0 and 999.",
+      );
+      return;
+    }
+    await storage.saveCapsuleCount(Number.parseInt(value, 10));
+    response.redirect("/");
   } catch (error) {
     next(error);
   }

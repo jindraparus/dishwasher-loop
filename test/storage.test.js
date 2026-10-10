@@ -24,6 +24,15 @@ test("persists tokens and events to a local JSON file", async () => {
       eventId: "event-1",
       data: { finished: true },
     });
+    await assert.rejects(
+      storage.saveCapsuleCount(-1),
+      /integer between 0 and 999/,
+    );
+    await assert.rejects(
+      storage.saveCapsuleCount(1000),
+      /integer between 0 and 999/,
+    );
+    await storage.saveCapsuleCount(24);
 
     const reloaded = new Storage("UseDevelopmentStorage=true", "unused", file);
     await reloaded.initialize();
@@ -34,6 +43,7 @@ test("persists tokens and events to a local JSON file", async () => {
       expiresAt: 123,
     });
     assert.deepEqual((await reloaded.listEvents())[0].data, { finished: true });
+    assert.equal(await reloaded.getCapsuleCount(), 24);
     assert.equal(JSON.parse(await readFile(file, "utf8")).events.length, 1);
   } finally {
     await rm(directory, { recursive: true });

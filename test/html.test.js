@@ -1,12 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { renderPage } from "../src/html.js";
+import { buildRecommendations, renderPage } from "../src/html.js";
 
 test("renders appliance metadata and current status diagnostics", () => {
   const html = renderPage({
     events: [],
     authorized: true,
     monitorStatus: "Monitoring 1 dishwasher",
+    capsuleCount: 12,
     error: "",
     diagnostics: [{
       id: "dishwasher-1",
@@ -29,10 +30,33 @@ test("renders appliance metadata and current status diagnostics", () => {
     }],
   });
 
-  assert.match(html, /Dishwasher diagnostics/);
+  assert.match(html, /Current diagnostics/);
+  assert.match(html, /Supplies/);
+  assert.match(html, /Recommendations/);
   assert.match(html, /Bosch · Dishwasher · SMV6/);
   assert.match(html, /Operation State/);
-  assert.match(html, /BSH\.Common\.EnumType\.OperationState\.Run/);
-  assert.match(html, /<dt>Salt<\/dt><dd>Enough<\/dd>/);
-  assert.match(html, /<dt>Rinse aid<\/dt><dd>Refill soon<\/dd>/);
+  assert.match(html, /<dd>Run<\/dd>/);
+  assert.match(html, /Dishwasher salt/);
+  assert.match(html, /Washing capsules/);
+  assert.match(html, /class="capsule-count ok">12</);
+});
+
+test("recommends restocking low supplies", () => {
+  const recommendations = buildRecommendations({
+    authorized: true,
+    capsuleCount: 3,
+    diagnostics: [{
+      connected: true,
+      statusItems: [],
+      consumables: {
+        salt: { state: "low", label: "Refill soon" },
+        rinseAid: { state: "ok", label: "Enough" },
+      },
+    }],
+  });
+
+  assert.deepEqual(recommendations.map((item) => item.title), [
+    "Refill dishwasher salt",
+    "Restock washing capsules",
+  ]);
 });

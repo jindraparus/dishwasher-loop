@@ -75,6 +75,9 @@ The UI includes:
 - online/offline state;
 - current Home Connect status values;
 - salt and rinse-aid refill warnings;
+- manually maintained washing-capsule inventory;
+- recommendations derived from connectivity, operation state, warnings, and
+  capsule inventory;
 - the latest received event type and timestamp; and
 - raw payloads for persisted event history.
 
@@ -140,6 +143,7 @@ Azure Table Storage uses two partitions:
 | Partition key | Row key | Contents |
 |---|---|---|
 | `settings` | `oauth` | Home Connect access token, refresh token, and expiry |
+| `settings` | `supplies` | Manually maintained washing-capsule count |
 | `events` | timestamp plus UUID | Appliance identity, event metadata, receipt time, and JSON payload |
 
 Tokens and events survive App Service restarts. Azure Storage encrypts the

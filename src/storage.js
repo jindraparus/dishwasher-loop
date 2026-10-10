@@ -5,6 +5,7 @@ import { TableClient } from "@azure/data-tables";
 
 const SETTINGS_PARTITION = "settings";
 const TOKENS_ROW = "oauth";
+const SUPPLIES_ROW = "supplies";
 const EVENTS_PARTITION = "events";
 
 export class Storage {
@@ -22,13 +23,16 @@ export class Storage {
       await mkdir(path.dirname(this.localFile), { recursive: true });
       try {
         this.localData = JSON.parse(await readFile(this.localFile, "utf8"));
+        this.localData.events ||= [];
+        this.localData.tokens ??= null;
+        this.localData.capsuleCount ??= null;
       } catch (error) {
         if (error.code !== "ENOENT") {
           throw new Error(`Unable to read local storage file ${this.localFile}`, {
             cause: error,
           });
         }
-        this.localData = { tokens: null, events: [] };
+        this.localData = { tokens: null, events: [], capsuleCount: null };
         await this.persistLocal();
       }
       return;
@@ -85,6 +89,39 @@ export class Storage {
     }
   }
 
+  async getCapsuleCount() {
+    if (this.localFile) {
+      return Number.isInteger(this.localData.capsuleCount)
+        ? this.localData.capsuleCount
+        : null;
+    }
+    try {
+      const entity = await this.client.getEntity(SETTINGS_PARTITION, SUPPLIES_ROW);
+      return Number.isInteger(entity.capsuleCount) ? entity.capsuleCount : null;
+    } catch (error) {
+      if (error.statusCode === 404) {
+        return null;
+      }
+      throw error;
+    }
+  }
+
+  async saveCapsuleCount(capsuleCount) {
+    if (!Number.isInteger(capsuleCount) || capsuleCount < 0 || capsuleCount > 999) {
+      throw new RangeError("Capsule count must be an integer between 0 and 999");
+    }
+    if (this.localFile) {
+      this.localData.capsuleCount = capsuleCount;
+      await this.persistLocal();
+      return;
+    }
+    await this.client.upsertEntity({
+      partitionKey: SETTINGS_PARTITION,
+      rowKey: SUPPLIES_ROW,
+      capsuleCount,
+    }, "Replace");
+  }
+
   async saveEvent({ applianceId, applianceName, eventType, eventId, data }) {
     const receivedAt = new Date().toISOString();
     if (this.localFile) {
@@ -139,7 +176,7 @@ export class Storage {
   }
 
   persistLocal() {
-    const temporaryFile = `${this.localFile}.tmp`;
+    const temporaryFile = `${this.localFile}.${process.pid}.${randomUUID()}.tmp`;
     const write = this.writePromise.then(async () => {
       await writeFile(temporaryFile, JSON.stringify(this.localData, null, 2), {
         mode: 0o600,
