@@ -63,11 +63,19 @@ Connect does not grant access to the UI.
 
 ## 3. Runtime components
 
-### 3.1 Browser and server-rendered UI
+### 3.1 Browser single-page application
 
-The browser requests the root page from the Node service. The service reads the
-latest 200 persisted events and in-memory diagnostics, then returns one
-server-rendered HTML document. The page refreshes every 30 seconds.
+The Node service serves a static HTML shell, stylesheet, and native JavaScript
+ES modules from `public/`. The browser requests current state from the
+authenticated `GET /api/dashboard` endpoint and renders each dashboard tile
+through a focused client component. It refreshes data in place every 30 seconds
+without navigating or reloading the document. Refresh is paused while the
+capsule input has focus so an in-progress edit is not discarded.
+
+The capsule inventory form writes JSON to
+`PUT /api/supplies/capsules` and updates the dashboard in place. OAuth login,
+callback, and disconnect remain full browser navigations because they cross an
+authentication boundary.
 
 The UI includes:
 
@@ -97,7 +105,8 @@ The service is an Express application running on Node.js 22. It owns:
 - SSE parsing and client-side filtering;
 - event persistence;
 - current diagnostics held in memory;
-- HTML rendering; and
+- authenticated dashboard and supply JSON APIs;
+- static SPA asset delivery; and
 - a data-free `/healthz` readiness endpoint.
 
 The service starts monitoring automatically when persisted Home Connect tokens
@@ -494,5 +503,5 @@ runtime code only.
   public API.
 - Salt and rinse-aid are warning states, not measured quantities.
 - The latest 200 events are rendered; there is no pagination or retention job.
-- The browser refreshes every 30 seconds; the browser itself does not receive a
-  live SSE stream.
+- The SPA polls dashboard state every 30 seconds; the browser itself does not
+  receive a live SSE stream.

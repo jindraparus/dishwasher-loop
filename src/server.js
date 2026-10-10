@@ -1,14 +1,16 @@
 import "dotenv/config";
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+import { fileURLToPath } from "node:url";
 import express from "express";
 import { loadConfig } from "./config.js";
-import { renderPage } from "./html.js";
 import { HomeConnectClient } from "./home-connect.js";
 import { requireAllowedMicrosoftUser } from "./microsoft-auth.js";
 import { DishwasherMonitor } from "./monitor.js";
 import { Storage } from "./storage.js";
 
 const config = loadConfig();
+const indexPath = fileURLToPath(new URL("../public/index.html", import.meta.url));
+const publicPath = fileURLToPath(new URL("../public", import.meta.url));
 const storage = new Storage(config.storageConnectionString, config.tableName);
 await storage.initialize();
 
@@ -24,6 +26,7 @@ if (await storage.getTokens()) {
 const app = express();
 app.disable("x-powered-by");
 app.use(express.urlencoded({ extended: false }));
+app.use(express.json({ limit: "10kb" }));
 
 app.get("/healthz", (request, response) => {
   response.json({ ok: true });
@@ -31,37 +34,36 @@ app.get("/healthz", (request, response) => {
 
 app.use(requireAllowedMicrosoftUser(config));
 
-app.get("/", async (request, response, next) => {
+app.get("/api/dashboard", async (request, response, next) => {
   try {
     const [events, tokens, capsuleCount] = await Promise.all([
       storage.listEvents(),
       storage.getTokens(),
       storage.getCapsuleCount(),
     ]);
-    response.type("html").send(renderPage({
+    response.json({
       events,
       authorized: Boolean(tokens),
       monitorStatus: monitor.getStatus(),
       diagnostics: monitor.getDiagnostics(),
       capsuleCount,
-      error: typeof request.query.error === "string" ? request.query.error : "",
-    }));
+    });
   } catch (error) {
     next(error);
   }
 });
 
-app.post("/supplies/capsules", async (request, response, next) => {
+app.put("/api/supplies/capsules", async (request, response, next) => {
   try {
-    const value = String(request.body.count || "").trim();
-    if (!/^\d{1,3}$/.test(value)) {
-      response.status(400).type("text").send(
-        "Capsule count must be a whole number between 0 and 999.",
-      );
+    const capsuleCount = request.body?.count;
+    if (!Number.isInteger(capsuleCount) || capsuleCount < 0 || capsuleCount > 999) {
+      response.status(400).json({
+        error: "Capsule count must be a whole number between 0 and 999.",
+      });
       return;
     }
-    await storage.saveCapsuleCount(Number.parseInt(value, 10));
-    response.redirect("/");
+    await storage.saveCapsuleCount(capsuleCount);
+    response.json({ capsuleCount });
   } catch (error) {
     next(error);
   }
@@ -110,10 +112,22 @@ app.post("/auth/disconnect", async (request, response, next) => {
   }
 });
 
+app.use(express.static(publicPath, { index: false }));
+app.get("/", (request, response) => {
+  response.set("Cache-Control", "no-store");
+  response.sendFile(indexPath);
+});
+
 app.use((error, request, response, next) => {
   console.error(error);
   if (response.headersSent) {
     next(error);
+    return;
+  }
+  if (request.path.startsWith("/api/")) {
+    response.status(500).json({
+      error: "An unexpected error occurred. Check the service logs.",
+    });
     return;
   }
   response.status(500).type("text").send("An unexpected error occurred. Check the service logs.");

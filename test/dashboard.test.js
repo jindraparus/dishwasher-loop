@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildRecommendations, renderPage } from "../src/html.js";
+import { renderDashboard } from "../public/components/dashboard.js";
+import { buildRecommendations } from "../public/components/recommendations.js";
 
 test("renders appliance metadata and current status diagnostics", () => {
-  const html = renderPage({
+  const html = renderDashboard({
     events: [],
     authorized: true,
     monitorStatus: "Monitoring 1 dishwasher",
@@ -75,7 +76,7 @@ test("recommends restocking low supplies", () => {
 });
 
 test("does not treat stale remaining time as an active wash", () => {
-  const html = renderPage({
+  const html = renderDashboard({
     events: [],
     authorized: true,
     monitorStatus: "Monitoring 1 dishwasher",
