@@ -205,7 +205,14 @@ export class DishwasherMonitor {
 
 function updateProgram(program, item, receivedAt) {
   if (item.key === "BSH.Common.Root.ActiveProgram") {
-    program.activeKey = typeof item.value === "string" ? item.value : "";
+    if (typeof item.value === "string") {
+      program.activeKey = item.value;
+    } else {
+      program.activeKey = "";
+      program.progress = null;
+      program.remainingSeconds = 0;
+      program.remainingUpdatedAt = receivedAt;
+    }
   } else if (item.key === "BSH.Common.Root.SelectedProgram") {
     program.selectedKey = typeof item.value === "string" ? item.value : "";
   } else if (item.key === "BSH.Common.Option.ProgramProgress") {

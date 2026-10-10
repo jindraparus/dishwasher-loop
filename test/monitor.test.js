@@ -138,3 +138,58 @@ test("restores current program details from persisted notifications", async () =
     remainingUpdatedAt: "2026-10-10T20:00:00.000Z",
   });
 });
+
+test("clears stale program timing when the active program ends", async () => {
+  const monitor = new DishwasherMonitor({
+    getApplianceStatus: async () => [{
+      key: "BSH.Common.Status.OperationState",
+      value: "BSH.Common.EnumType.OperationState.Ready",
+    }],
+  }, {
+    listEvents: async () => [
+      {
+        applianceId: "dishwasher-1",
+        eventType: "NOTIFY",
+        receivedAt: "2026-10-10T20:30:00.000Z",
+        data: {
+          items: [{
+            key: "BSH.Common.Root.ActiveProgram",
+            value: null,
+          }],
+        },
+      },
+      {
+        applianceId: "dishwasher-1",
+        eventType: "NOTIFY",
+        receivedAt: "2026-10-10T20:29:00.000Z",
+        data: {
+          items: [
+            {
+              key: "BSH.Common.Option.ProgramProgress",
+              value: 99,
+            },
+            {
+              key: "BSH.Common.Option.RemainingProgramTime",
+              value: 60,
+            },
+          ],
+        },
+      },
+    ],
+  });
+
+  await monitor.loadDiagnostics([{
+    haId: "dishwasher-1",
+    name: "Kitchen dishwasher",
+    type: "Dishwasher",
+    connected: true,
+  }]);
+
+  assert.deepEqual(monitor.getDiagnostics()[0].program, {
+    activeKey: "",
+    selectedKey: "",
+    progress: null,
+    remainingSeconds: 0,
+    remainingUpdatedAt: "2026-10-10T20:30:00.000Z",
+  });
+});
