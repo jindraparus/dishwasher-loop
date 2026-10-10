@@ -382,7 +382,10 @@ deployment ZIP or Git repository.
 The GitHub Actions workflow is defined in
 [`../.github/workflows/deploy.yml`](../.github/workflows/deploy.yml).
 
-It runs on pushes to `main` and by manual dispatch:
+It runs only when manually dispatched from the `main` branch. Ordinary pushes,
+including pushes to `main`, do not deploy the application. Selecting another
+branch when starting the workflow fails Azure authentication because the
+federated credential is intentionally restricted to the `main` branch.
 
 ```mermaid
 sequenceDiagram
