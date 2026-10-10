@@ -1,0 +1,129 @@
+name: Deploy to Azure
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: production-deployment
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Test and deploy
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build deployment package
+        run: zip -q -r app.zip package.json package-lock.json src
+
+      - name: Sign in to Azure with OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Record current deployment
+        id: current-deployment
+        shell: bash
+        run: |
+          deployment_id="$(
+            az rest \
+              --method get \
+              --url "https://${{ vars.AZURE_WEBAPP_NAME }}.scm.azurewebsites.net/api/deployments/latest" \
+              --resource "https://management.azure.com/" \
+              --query id \
+              --output tsv 2>/dev/null || true
+          )"
+          echo "id=$deployment_id" >> "$GITHUB_OUTPUT"
+
+      - name: Upload application
+        run: |
+          az webapp deploy \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --name "${{ vars.AZURE_WEBAPP_NAME }}" \
+            --src-path app.zip \
+            --type zip \
+            --clean true \
+            --restart true \
+            --async true \
+            --output none
+
+      - name: Wait for deployment
+        env:
+          PREVIOUS_DEPLOYMENT_ID: ${{ steps.current-deployment.outputs.id }}
+        shell: bash
+        run: |
+          for attempt in {1..60}; do
+            deployment="$(
+              az rest \
+                --method get \
+                --url "https://${{ vars.AZURE_WEBAPP_NAME }}.scm.azurewebsites.net/api/deployments/latest" \
+                --resource "https://management.azure.com/" \
+                --output json
+            )"
+            deployment_id="$(jq -r '.id // ""' <<< "$deployment")"
+            complete="$(jq -r '.complete // false' <<< "$deployment")"
+            status="$(jq -r '.status // -1' <<< "$deployment")"
+
+            if [[ -n "$deployment_id" && "$deployment_id" != "$PREVIOUS_DEPLOYMENT_ID" ]]; then
+              echo "Deployment $deployment_id: complete=$complete status=$status"
+              if [[ "$complete" == "true" ]]; then
+                if [[ "$status" == "4" ]]; then
+                  exit 0
+                fi
+                echo "Azure deployment failed with status $status" >&2
+                exit 1
+              fi
+            else
+              echo "Waiting for Azure to register the new deployment..."
+            fi
+
+            sleep 10
+          done
+
+          echo "Timed out waiting for Azure deployment completion" >&2
+          exit 1
+
+      - name: Verify application health
+        shell: bash
+        run: |
+          for attempt in {1..60}; do
+            if response="$(curl --fail --silent --show-error --max-time 15 \
+              "https://${{ vars.AZURE_WEBAPP_NAME }}.azurewebsites.net/healthz")" \
+              && [[ "$response" == '{"ok":true}' ]]; then
+              echo "Application is healthy"
+              exit 0
+            fi
+            echo "Waiting for application readiness..."
+            sleep 10
+          done
+
+          echo "Application did not become healthy" >&2
+          exit 1
+
+      - name: Sign out of Azure
+        if: always()
+        run: az logout

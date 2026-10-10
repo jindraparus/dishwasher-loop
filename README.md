@@ -118,6 +118,30 @@ Secrets are App Service settings, and OAuth tokens and event history are stored
 in encrypted-at-rest Azure Table Storage. The root page is intentionally
 protected by App Service Authentication plus the application email allowlist.
 
+### Continuous deployment
+
+The `Deploy to Azure` GitHub Actions workflow runs on every push to `main` and
+can also be started manually. It:
+
+1. installs dependencies and runs the test suite;
+2. packages only `package.json`, `package-lock.json`, and `src/`;
+3. signs in to Azure using GitHub OIDC, without a client secret;
+4. deploys the ZIP asynchronously;
+5. waits for the new Kudu deployment to succeed; and
+6. verifies the anonymous `/healthz` readiness endpoint.
+
+The repository uses these non-secret GitHub Actions variables:
+
+- `AZURE_CLIENT_ID`
+- `AZURE_TENANT_ID`
+- `AZURE_SUBSCRIPTION_ID`
+- `AZURE_RESOURCE_GROUP`
+- `AZURE_WEBAPP_NAME`
+
+The federated credential is restricted to the `main` branch of
+`jindraparus/dishwasher-loop`. Its service principal has Website Contributor
+access scoped only to the `jparusdishwasher` App Service resource.
+
 ## Operational notes
 
 - The monitor reconnects with exponential backoff when Home Connect closes a
