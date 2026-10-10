@@ -1,0 +1,17 @@
+# Dependencies
+node_modules/
+
+# Local configuration and persisted data
+.data/
+.env
+.env.*
+!.env.example
+
+# Deployment artifacts
+*.zip
+/app/
+infra/*.json
+
+# Logs and operating system files
+.DS_Store
+*.log
