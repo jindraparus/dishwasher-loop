@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -17,6 +17,7 @@ test("persists tokens and events to a local JSON file", async () => {
       refreshToken: "refresh",
       expiresAt: 123,
     });
+
     await storage.saveEvent({
       applianceId: "dishwasher-1",
       applianceName: "Dishwasher",
@@ -34,6 +35,25 @@ test("persists tokens and events to a local JSON file", async () => {
     });
     assert.deepEqual((await reloaded.listEvents())[0].data, { finished: true });
     assert.equal(JSON.parse(await readFile(file, "utf8")).events.length, 1);
+  } finally {
+    await rm(directory, { recursive: true });
+  }
+});
+
+test("reads capsule inventory from the local settings store", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "dishwasher-loop-"));
+  const file = path.join(directory, "storage.json");
+
+  try {
+    await writeFile(file, JSON.stringify({
+      tokens: null,
+      events: [],
+      capsuleCount: 24,
+    }));
+    const storage = new Storage("local", "unused", file);
+    await storage.initialize();
+
+    assert.equal(await storage.getCapsuleCount(), 24);
   } finally {
     await rm(directory, { recursive: true });
   }

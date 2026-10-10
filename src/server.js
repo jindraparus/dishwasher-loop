@@ -35,15 +35,17 @@ app.use(requireAllowedMicrosoftUser(config));
 
 app.get("/api/dashboard", async (request, response, next) => {
   try {
-    const [events, tokens] = await Promise.all([
+    const [events, tokens, capsuleCount] = await Promise.all([
       storage.listEvents(),
       storage.getTokens(),
+      storage.getCapsuleCount(),
     ]);
     response.json({
       events,
       authorized: Boolean(tokens),
       monitorStatus: monitor.getStatus(),
       diagnostics: monitor.getDiagnostics(),
+      capsuleCount,
     });
   } catch (error) {
     next(error);

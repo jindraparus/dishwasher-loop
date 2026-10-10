@@ -3,7 +3,6 @@ import {
   renderDashboard,
   renderDashboardError,
 } from "./components/dashboard.js";
-import { readCapsuleCount } from "./lib/capsules.js";
 
 const REFRESH_INTERVAL_MS = 30_000;
 const app = document.querySelector("#app");
@@ -42,10 +41,7 @@ async function refreshDashboard() {
   }
   refreshPromise = (async () => {
     try {
-      dashboardState = {
-        ...await getDashboard(),
-        capsuleCount: readCapsuleCount(),
-      };
+      dashboardState = await getDashboard();
       app.innerHTML = renderDashboard(dashboardState, { error: pendingError });
       pendingError = "";
     } catch (error) {

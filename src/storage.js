@@ -5,6 +5,7 @@ import { TableClient } from "@azure/data-tables";
 
 const SETTINGS_PARTITION = "settings";
 const TOKENS_ROW = "oauth";
+const SUPPLIES_ROW = "supplies";
 const EVENTS_PARTITION = "events";
 
 export class Storage {
@@ -87,6 +88,21 @@ export class Storage {
     }
   }
 
+  async getCapsuleCount() {
+    if (this.localFile) {
+      return validCapsuleCount(this.localData.capsuleCount);
+    }
+    try {
+      const entity = await this.client.getEntity(SETTINGS_PARTITION, SUPPLIES_ROW);
+      return validCapsuleCount(entity.capsuleCount);
+    } catch (error) {
+      if (error.statusCode === 404) {
+        return null;
+      }
+      throw error;
+    }
+  }
+
   async saveEvent({ applianceId, applianceName, eventType, eventId, data }) {
     const receivedAt = new Date().toISOString();
     if (this.localFile) {
@@ -164,4 +180,8 @@ function parsePayload(payload) {
 function isLocalConnection(connectionString) {
   return connectionString.trim().toLowerCase() === "local"
     || connectionString.trim().toLowerCase() === "usedevelopmentstorage=true";
+}
+
+function validCapsuleCount(value) {
+  return Number.isInteger(value) && value >= 0 && value <= 999 ? value : null;
 }
