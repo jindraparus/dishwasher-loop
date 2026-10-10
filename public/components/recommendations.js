@@ -55,8 +55,8 @@ export function buildRecommendations({ authorized, diagnostics, capsuleCount }, 
   }
   if (!Number.isInteger(capsuleCount)) {
     recommendations.push({
-      title: "Set capsule inventory",
-      text: "Enter the number of washing capsules currently available.",
+      title: "Capsule inventory unavailable",
+      text: "No valid capsule amount is available in local browser storage.",
       tone: "",
     });
   } else if (capsuleCount <= 5) {

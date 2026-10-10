@@ -69,13 +69,13 @@ The Node service serves a static HTML shell, stylesheet, and native JavaScript
 ES modules from `public/`. The browser requests current state from the
 authenticated `GET /api/dashboard` endpoint and renders each dashboard tile
 through a focused client component. It refreshes data in place every 30 seconds
-without navigating or reloading the document. Refresh is paused while the
-capsule input has focus so an in-progress edit is not discarded.
+without navigating or reloading the document.
 
-The capsule inventory form writes JSON to
-`PUT /api/supplies/capsules` and updates the dashboard in place. OAuth login,
-callback, and disconnect remain full browser navigations because they cross an
-authentication boundary.
+The capsule tile reads the optional `dishwasher.capsuleCount` value from browser
+`localStorage`. The value must be a whole number from 0 through 999. Missing or
+invalid values are shown as unavailable. This version intentionally provides no
+UI or API for writing the value. OAuth login, callback, and disconnect remain
+full browser navigations because they cross an authentication boundary.
 
 The UI includes:
 
@@ -84,7 +84,7 @@ The UI includes:
 - current Home Connect status values;
 - active program, progress, adjusted remaining time, and estimated finish;
 - salt and rinse-aid refill warnings;
-- manually maintained washing-capsule inventory;
+- read-only washing-capsule inventory from browser local storage;
 - recommendations derived from connectivity, operation state, warnings, and
   capsule inventory;
 - the latest received event type and timestamp; and
@@ -153,7 +153,6 @@ Azure Table Storage uses two partitions:
 | Partition key | Row key | Contents |
 |---|---|---|
 | `settings` | `oauth` | Home Connect access token, refresh token, and expiry |
-| `settings` | `supplies` | Manually maintained washing-capsule count |
 | `events` | timestamp plus UUID | Appliance identity, event metadata, receipt time, and JSON payload |
 
 Tokens and events survive App Service restarts. Azure Storage encrypts the

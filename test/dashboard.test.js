@@ -75,6 +75,20 @@ test("recommends restocking low supplies", () => {
   ]);
 });
 
+test("shows unavailable when local capsule inventory is missing", () => {
+  const html = renderDashboard({
+    events: [],
+    authorized: true,
+    monitorStatus: "Monitoring 1 dishwasher",
+    capsuleCount: null,
+    diagnostics: [],
+  });
+
+  assert.match(html, /Washing capsules/);
+  assert.match(html, /Not available/);
+  assert.doesNotMatch(html, /data-capsule-form/);
+});
+
 test("does not treat stale remaining time as an active wash", () => {
   const html = renderDashboard({
     events: [],

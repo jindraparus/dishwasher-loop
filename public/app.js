@@ -1,8 +1,9 @@
-import { getDashboard, saveCapsuleCount } from "./api.js";
+import { getDashboard } from "./api.js";
 import {
   renderDashboard,
   renderDashboardError,
 } from "./components/dashboard.js";
+import { readCapsuleCount } from "./lib/capsules.js";
 
 const REFRESH_INTERVAL_MS = 30_000;
 const app = document.querySelector("#app");
@@ -14,25 +15,6 @@ let refreshPromise = null;
 if (pendingError) {
   history.replaceState({}, "", location.pathname);
 }
-
-app.addEventListener("submit", async (event) => {
-  const form = event.target.closest("[data-capsule-form]");
-  if (!form) {
-    return;
-  }
-
-  event.preventDefault();
-  const input = form.elements.namedItem("count");
-  const button = form.querySelector("button");
-  button.disabled = true;
-  try {
-    await saveCapsuleCount(Number(input.value));
-    await refreshDashboard();
-  } catch (error) {
-    showError(error);
-    button.disabled = false;
-  }
-});
 
 app.addEventListener("click", (event) => {
   if (event.target.closest("[data-retry]")) {
@@ -47,10 +29,7 @@ document.addEventListener("visibilitychange", () => {
 });
 
 setInterval(() => {
-  if (
-    document.visibilityState === "visible"
-    && !document.activeElement?.closest("[data-capsule-form]")
-  ) {
+  if (document.visibilityState === "visible") {
     void refreshDashboard();
   }
 }, REFRESH_INTERVAL_MS);
@@ -63,7 +42,10 @@ async function refreshDashboard() {
   }
   refreshPromise = (async () => {
     try {
-      dashboardState = await getDashboard();
+      dashboardState = {
+        ...await getDashboard(),
+        capsuleCount: readCapsuleCount(),
+      };
       app.innerHTML = renderDashboard(dashboardState, { error: pendingError });
       pendingError = "";
     } catch (error) {

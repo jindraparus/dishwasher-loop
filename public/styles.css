@@ -153,15 +153,7 @@ dd { font-weight: 650; margin: 0; overflow-wrap: anywhere; text-align: right; }
 .supply-value.ok { color: var(--primary-dark); }
 .supply-value.unknown { color: var(--muted); }
 .capsule-count { font-size: 2rem; font-weight: 800; letter-spacing: -.05em; }
-.inventory-form { display: flex; gap: .5rem; margin-top: .8rem; }
-.inventory-form input {
-  border: 1px solid var(--line);
-  border-radius: .65rem;
-  min-width: 0;
-  padding: .58rem .65rem;
-  width: 100%;
-}
-.inventory-form .button { padding-inline: .85rem; }
+.capsule-count.unknown { color: var(--muted); font-size: 1.08rem; letter-spacing: 0; }
 .program-state {
   color: var(--primary-dark);
   font-size: .78rem;

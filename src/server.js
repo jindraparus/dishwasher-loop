@@ -26,7 +26,6 @@ if (await storage.getTokens()) {
 const app = express();
 app.disable("x-powered-by");
 app.use(express.urlencoded({ extended: false }));
-app.use(express.json({ limit: "10kb" }));
 
 app.get("/healthz", (request, response) => {
   response.json({ ok: true });
@@ -36,34 +35,16 @@ app.use(requireAllowedMicrosoftUser(config));
 
 app.get("/api/dashboard", async (request, response, next) => {
   try {
-    const [events, tokens, capsuleCount] = await Promise.all([
+    const [events, tokens] = await Promise.all([
       storage.listEvents(),
       storage.getTokens(),
-      storage.getCapsuleCount(),
     ]);
     response.json({
       events,
       authorized: Boolean(tokens),
       monitorStatus: monitor.getStatus(),
       diagnostics: monitor.getDiagnostics(),
-      capsuleCount,
     });
-  } catch (error) {
-    next(error);
-  }
-});
-
-app.put("/api/supplies/capsules", async (request, response, next) => {
-  try {
-    const capsuleCount = request.body?.count;
-    if (!Number.isInteger(capsuleCount) || capsuleCount < 0 || capsuleCount > 999) {
-      response.status(400).json({
-        error: "Capsule count must be a whole number between 0 and 999.",
-      });
-      return;
-    }
-    await storage.saveCapsuleCount(capsuleCount);
-    response.json({ capsuleCount });
   } catch (error) {
     next(error);
   }
