@@ -100,6 +100,13 @@ export class DishwasherMonitor {
           salt: unknownConsumableStatus(),
           rinseAid: unknownConsumableStatus(),
         },
+        program: {
+          activeKey: "",
+          selectedKey: "",
+          progress: null,
+          remainingSeconds: null,
+          remainingUpdatedAt: "",
+        },
         lastEventType: "",
         lastEventAt: "",
       };
@@ -167,8 +174,9 @@ export class DishwasherMonitor {
     }
 
     diagnostic.connected = true;
+    const receivedAt = message.receivedAt || new Date().toISOString();
     diagnostic.lastEventType = message.event;
-    diagnostic.lastEventAt = message.receivedAt || new Date().toISOString();
+    diagnostic.lastEventAt = receivedAt;
     if (!Array.isArray(message.data?.items)) {
       return;
     }
@@ -178,6 +186,7 @@ export class DishwasherMonitor {
       if (consumable) {
         diagnostic.consumables[consumable] = consumableStatus(item.value);
       }
+      updateProgram(diagnostic.program, item, receivedAt);
       if (message.event !== "STATUS") {
         continue;
       }
@@ -191,6 +200,25 @@ export class DishwasherMonitor {
         diagnostic.statusItems[existingIndex] = item;
       }
     }
+  }
+}
+
+function updateProgram(program, item, receivedAt) {
+  if (item.key === "BSH.Common.Root.ActiveProgram") {
+    program.activeKey = typeof item.value === "string" ? item.value : "";
+  } else if (item.key === "BSH.Common.Root.SelectedProgram") {
+    program.selectedKey = typeof item.value === "string" ? item.value : "";
+  } else if (item.key === "BSH.Common.Option.ProgramProgress") {
+    const progress = Number(item.value);
+    program.progress = Number.isFinite(progress)
+      ? Math.min(100, Math.max(0, progress))
+      : null;
+  } else if (item.key === "BSH.Common.Option.RemainingProgramTime") {
+    const remainingSeconds = Number(item.value);
+    program.remainingSeconds = Number.isFinite(remainingSeconds)
+      ? Math.max(0, remainingSeconds)
+      : null;
+    program.remainingUpdatedAt = receivedAt;
   }
 }
 

@@ -20,6 +20,13 @@ test("renders appliance metadata and current status diagnostics", () => {
         key: "BSH.Common.Status.OperationState",
         value: "BSH.Common.EnumType.OperationState.Run",
       }],
+      program: {
+        activeKey: "Dishcare.Dishwasher.Program.Eco50",
+        selectedKey: "Dishcare.Dishwasher.Program.Eco50",
+        progress: 37,
+        remainingSeconds: 6240,
+        remainingUpdatedAt: new Date().toISOString(),
+      },
       consumables: {
         salt: { state: "ok", label: "Enough" },
         rinseAid: { state: "low", label: "Refill soon" },
@@ -31,6 +38,12 @@ test("renders appliance metadata and current status diagnostics", () => {
   });
 
   assert.match(html, /Current diagnostics/);
+  assert.match(html, /Current program/);
+  assert.match(html, /Washing in progress/);
+  assert.match(html, /Eco 50/);
+  assert.match(html, /1h 44m/);
+  assert.match(html, /Estimated finish/);
+  assert.match(html, /<strong>37%<\/strong>/);
   assert.match(html, /Supplies/);
   assert.match(html, /Recommendations/);
   assert.match(html, /Bosch · Dishwasher · SMV6/);

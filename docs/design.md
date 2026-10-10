@@ -74,6 +74,7 @@ The UI includes:
 - appliance name, brand, type, and model;
 - online/offline state;
 - current Home Connect status values;
+- active program, progress, adjusted remaining time, and estimated finish;
 - salt and rinse-aid refill warnings;
 - manually maintained washing-capsule inventory;
 - recommendations derived from connectivity, operation state, warnings, and

@@ -90,3 +90,51 @@ test("restores the latest persisted salt warning into diagnostics", async () => 
     label: "Refill soon",
   });
 });
+
+test("restores current program details from persisted notifications", async () => {
+  const monitor = new DishwasherMonitor({
+    getApplianceStatus: async () => [{
+      key: "BSH.Common.Status.OperationState",
+      value: "BSH.Common.EnumType.OperationState.Run",
+    }],
+  }, {
+    listEvents: async () => [{
+      applianceId: "dishwasher-1",
+      eventType: "NOTIFY",
+      receivedAt: "2026-10-10T20:00:00.000Z",
+      data: {
+        items: [
+          {
+            key: "BSH.Common.Root.ActiveProgram",
+            value: "Dishcare.Dishwasher.Program.Eco50",
+          },
+          {
+            key: "BSH.Common.Option.ProgramProgress",
+            value: 37,
+            unit: "%",
+          },
+          {
+            key: "BSH.Common.Option.RemainingProgramTime",
+            value: 6240,
+            unit: "seconds",
+          },
+        ],
+      },
+    }],
+  });
+
+  await monitor.loadDiagnostics([{
+    haId: "dishwasher-1",
+    name: "Kitchen dishwasher",
+    type: "Dishwasher",
+    connected: true,
+  }]);
+
+  assert.deepEqual(monitor.getDiagnostics()[0].program, {
+    activeKey: "Dishcare.Dishwasher.Program.Eco50",
+    selectedKey: "",
+    progress: 37,
+    remainingSeconds: 6240,
+    remainingUpdatedAt: "2026-10-10T20:00:00.000Z",
+  });
+});

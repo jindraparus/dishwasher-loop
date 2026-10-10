@@ -122,8 +122,9 @@ export function renderPage({
         padding: 1.25rem;
       }
       .diagnostics-card { grid-column: span 5; }
+      .program-card { grid-column: span 4; }
       .supplies-card { grid-column: span 3; }
-      .recommendations-card { grid-column: span 4; }
+      .recommendations-card { grid-column: 1 / -1; }
       .events-card { grid-column: 1 / -1; margin-top: .15rem; }
       .card-heading {
         align-items: center;
@@ -172,6 +173,41 @@ export function renderPage({
         width: 100%;
       }
       .inventory-form .button { padding-inline: .85rem; }
+      .program-state {
+        color: var(--primary-dark);
+        font-size: .78rem;
+        font-weight: 750;
+        letter-spacing: .08em;
+        margin-bottom: .35rem;
+        text-transform: uppercase;
+      }
+      .program-name { font-size: 1.35rem; letter-spacing: -.03em; margin-bottom: 1rem; }
+      .program-progress {
+        appearance: none;
+        background: var(--primary-soft);
+        border: 0;
+        border-radius: 999px;
+        display: block;
+        height: .65rem;
+        margin: .6rem 0 1rem;
+        overflow: hidden;
+        width: 100%;
+      }
+      .program-progress::-webkit-progress-bar { background: var(--primary-soft); }
+      .program-progress::-webkit-progress-value { background: var(--primary); border-radius: 999px; }
+      .program-progress::-moz-progress-bar { background: var(--primary); border-radius: 999px; }
+      .program-metrics {
+        display: grid;
+        gap: .8rem;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      .program-metric {
+        background: #f5f9f8;
+        border-radius: .65rem;
+        padding: .7rem .75rem;
+      }
+      .program-metric span { color: var(--muted); display: block; font-size: .76rem; }
+      .program-metric strong { display: block; font-size: 1rem; margin-top: .1rem; }
       .recommendations { display: grid; gap: .7rem; list-style: none; margin: 0; padding: 0; }
       .recommendation {
         background: #f5f9f8;
@@ -217,12 +253,12 @@ export function renderPage({
         white-space: pre-wrap;
       }
       @media (max-width: 950px) {
-        .diagnostics-card, .supplies-card, .recommendations-card { grid-column: span 6; }
+        .diagnostics-card, .program-card, .supplies-card, .recommendations-card { grid-column: span 6; }
         .recommendations-card { grid-column: 1 / -1; }
       }
       @media (max-width: 640px) {
         .shell { padding: 1.2rem .8rem 3rem; }
-        .diagnostics-card, .supplies-card, .recommendations-card { grid-column: 1 / -1; }
+        .diagnostics-card, .program-card, .supplies-card, .recommendations-card { grid-column: 1 / -1; }
         .card { padding: 1rem; }
         summary { grid-template-columns: 1fr auto; }
         summary time { grid-column: 1 / -1; }
@@ -255,6 +291,7 @@ export function renderPage({
             ? `<p class="empty">Connect Home Connect to see appliance diagnostics.</p>`
             : diagnostics.map(renderDiagnostics).join("")}
         </section>
+        ${renderProgram(diagnostics)}
         ${renderSupplies(diagnostics, capsuleCount)}
         <section class="card recommendations-card">
           <div class="card-heading"><h2>Recommendations</h2><span class="icon" aria-hidden="true">✦</span></div>
@@ -273,6 +310,46 @@ export function renderPage({
     </div>
   </body>
 </html>`;
+}
+
+function renderProgram(diagnostics) {
+  const diagnostic = diagnostics[0];
+  const operationState = findStatusValue(diagnostic, ".OperationState");
+  const running = String(operationState).endsWith(".Run");
+  const program = diagnostic?.program;
+  const programKey = program?.activeKey || program?.selectedKey;
+  const programName = programKey ? formatProgramName(programKey) : "Program unavailable";
+
+  if (!running) {
+    return `<section class="card program-card">
+      <div class="card-heading"><h2>Current program</h2><span class="icon" aria-hidden="true">◷</span></div>
+      <p class="program-state">${escapeHtml(formatValue(operationState || "Idle"))}</p>
+      <h3 class="program-name">No wash in progress</h3>
+      ${programKey ? `<p class="subtle">Selected program: ${escapeHtml(programName)}</p>` : `<p class="subtle">Program details will appear when a wash starts.</p>`}
+    </section>`;
+  }
+
+  const progress = Number.isFinite(program?.progress) ? Math.round(program.progress) : null;
+  const remainingSeconds = adjustedRemainingSeconds(program);
+  const estimatedFinish = remainingSeconds === null
+    ? ""
+    : new Date(Date.now() + remainingSeconds * 1000).toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+
+  return `<section class="card program-card">
+    <div class="card-heading"><h2>Current program</h2><span class="icon" aria-hidden="true">◷</span></div>
+    <p class="program-state">Washing in progress</p>
+    <h3 class="program-name">${escapeHtml(programName)}</h3>
+    ${progress === null ? "" : `<progress class="program-progress" max="100" value="${progress}" aria-label="Program progress">${progress}%</progress>`}
+    <div class="program-metrics">
+      <div class="program-metric"><span>Remaining</span><strong>${escapeHtml(remainingSeconds === null ? "Waiting for update" : formatDuration(remainingSeconds))}</strong></div>
+      <div class="program-metric"><span>Estimated finish</span><strong>${escapeHtml(estimatedFinish || "Waiting for update")}</strong></div>
+      ${progress === null ? "" : `<div class="program-metric"><span>Progress</span><strong>${progress}%</strong></div>`}
+      <div class="program-metric"><span>Appliance</span><strong>${escapeHtml(diagnostic?.name || "Dishwasher")}</strong></div>
+    </div>
+  </section>`;
 }
 
 function renderDiagnostics(diagnostic) {
@@ -300,6 +377,41 @@ function renderDiagnostics(diagnostic) {
     )}</p>
     <dl>${details.map(([label, value]) => `<dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd>`).join("")}</dl>
   </section>`;
+}
+
+function findStatusValue(diagnostic, keySuffix) {
+  return diagnostic?.statusItems?.find(
+    (item) => String(item.key).endsWith(keySuffix),
+  )?.value;
+}
+
+function adjustedRemainingSeconds(program) {
+  if (!Number.isFinite(program?.remainingSeconds)) {
+    return null;
+  }
+  const updatedAt = new Date(program.remainingUpdatedAt).valueOf();
+  const elapsed = Number.isFinite(updatedAt)
+    ? Math.max(0, Math.floor((Date.now() - updatedAt) / 1000))
+    : 0;
+  return Math.max(0, Math.round(program.remainingSeconds - elapsed));
+}
+
+function formatDuration(totalSeconds) {
+  const minutes = Math.max(0, Math.ceil(totalSeconds / 60));
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  if (hours === 0) {
+    return `${remainingMinutes}m`;
+  }
+  return remainingMinutes === 0 ? `${hours}h` : `${hours}h ${remainingMinutes}m`;
+}
+
+function formatProgramName(key) {
+  const name = String(key).split(".").at(-1);
+  return name
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/([A-Za-z])(\d)/g, "$1 $2")
+    .replace(/(\d)([A-Za-z])/g, "$1 $2");
 }
 
 function renderSupplies(diagnostics, capsuleCount) {
