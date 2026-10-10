@@ -45,19 +45,19 @@ test("keeps only messages containing a selected item key", () => {
 test("maps dishwasher consumable warning states", () => {
   assert.deepEqual(consumableStatus("BSH.Common.EnumType.EventPresentState.Off"), {
     state: "ok",
-    label: "Enough",
+    label: "Dostatek",
   });
   assert.deepEqual(consumableStatus("BSH.Common.EnumType.EventPresentState.Present"), {
     state: "low",
-    label: "Refill soon",
+    label: "Brzy doplnit",
   });
   assert.deepEqual(consumableStatus("BSH.Common.EnumType.EventPresentState.Confirmed"), {
     state: "low",
-    label: "Refill soon (warning acknowledged)",
+    label: "Brzy doplnit (upozornění potvrzeno)",
   });
   assert.deepEqual(consumableStatus("unexpected"), {
     state: "unknown",
-    label: "Unknown - waiting for appliance event",
+    label: "Neznámé – čeká se na událost spotřebiče",
   });
 });
 
@@ -87,7 +87,7 @@ test("restores the latest persisted salt warning into diagnostics", async () => 
 
   assert.deepEqual(monitor.getDiagnostics()[0].consumables.salt, {
     state: "low",
-    label: "Refill soon",
+    label: "Brzy doplnit",
   });
 });
 

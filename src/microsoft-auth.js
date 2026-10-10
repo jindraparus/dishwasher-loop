@@ -13,7 +13,7 @@ export function requireAllowedMicrosoftUser(config) {
 
     const identity = getMicrosoftUserIdentity(request.headers);
     if (!identity.authenticated) {
-      response.status(401).type("text").send("Microsoft authentication is required.");
+      response.status(401).type("text").send("Je vyžadováno přihlášení přes Microsoft.");
       return;
     }
     const allowedPrincipalIds = config.allowedPrincipalIds
@@ -25,7 +25,7 @@ export function requireAllowedMicrosoftUser(config) {
       && config.allowedEmail
       && identity.emails.includes(config.allowedEmail);
     if (!principalMatches && !emailMatches) {
-      response.status(403).type("text").send("This Microsoft account is not authorized.");
+      response.status(403).type("text").send("Tento účet Microsoft nemá oprávnění.");
       return;
     }
 

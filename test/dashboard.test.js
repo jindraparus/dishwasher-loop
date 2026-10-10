@@ -7,7 +7,7 @@ test("renders appliance metadata and current status diagnostics", () => {
   const html = renderDashboard({
     events: [],
     authorized: true,
-    monitorStatus: "Monitoring 1 dishwasher",
+    monitorStatus: "Sledována 1 myčka",
     capsuleCount: 12,
     error: "",
     diagnostics: [{
@@ -29,8 +29,8 @@ test("renders appliance metadata and current status diagnostics", () => {
         remainingUpdatedAt: new Date().toISOString(),
       },
       consumables: {
-        salt: { state: "ok", label: "Enough" },
-        rinseAid: { state: "low", label: "Refill soon" },
+        salt: { state: "ok", label: "Dostatek" },
+        rinseAid: { state: "low", label: "Brzy doplnit" },
       },
       statusError: "",
       lastEventType: "STATUS",
@@ -38,20 +38,20 @@ test("renders appliance metadata and current status diagnostics", () => {
     }],
   });
 
-  assert.match(html, /Current diagnostics/);
-  assert.match(html, /Current program/);
-  assert.match(html, /Washing in progress/);
+  assert.match(html, /Aktuální diagnostika/);
+  assert.match(html, /Aktuální program/);
+  assert.match(html, /Probíhá mytí/);
   assert.match(html, /Eco 50/);
-  assert.match(html, /1h 44m/);
-  assert.match(html, /Estimated finish/);
+  assert.match(html, /1 h 44 min/);
+  assert.match(html, /Odhad dokončení/);
   assert.match(html, /<strong>37%<\/strong>/);
-  assert.match(html, /Supplies/);
-  assert.match(html, /Recommendations/);
-  assert.match(html, /Bosch · Dishwasher · SMV6/);
-  assert.match(html, /Operation State/);
-  assert.match(html, /<dd>Ready<\/dd>/);
-  assert.match(html, /Dishwasher salt/);
-  assert.match(html, /Washing capsules/);
+  assert.match(html, /Zásoby/);
+  assert.match(html, /Doporučení/);
+  assert.match(html, /Bosch · Myčka nádobí · SMV6/);
+  assert.match(html, /Provozní stav/);
+  assert.match(html, /<dd>Připraveno<\/dd>/);
+  assert.match(html, /Sůl do myčky/);
+  assert.match(html, /Tablety do myčky/);
   assert.match(html, /class="capsule-count ok">12</);
 });
 
@@ -63,15 +63,15 @@ test("recommends restocking low supplies", () => {
       connected: true,
       statusItems: [],
       consumables: {
-        salt: { state: "low", label: "Refill soon" },
-        rinseAid: { state: "ok", label: "Enough" },
+        salt: { state: "low", label: "Brzy doplnit" },
+        rinseAid: { state: "ok", label: "Dostatek" },
       },
     }],
   });
 
   assert.deepEqual(recommendations.map((item) => item.title), [
-    "Refill dishwasher salt",
-    "Restock washing capsules",
+    "Doplňte sůl do myčky",
+    "Doplňte tablety do myčky",
   ]);
 });
 
@@ -79,13 +79,13 @@ test("shows unavailable when local capsule inventory is missing", () => {
   const html = renderDashboard({
     events: [],
     authorized: true,
-    monitorStatus: "Monitoring 1 dishwasher",
+    monitorStatus: "Sledována 1 myčka",
     capsuleCount: null,
     diagnostics: [],
   });
 
-  assert.match(html, /Washing capsules/);
-  assert.match(html, /Not available/);
+  assert.match(html, /Tablety do myčky/);
+  assert.match(html, /Není k dispozici/);
   assert.doesNotMatch(html, /data-capsule-form/);
 });
 
@@ -93,7 +93,7 @@ test("does not treat stale remaining time as an active wash", () => {
   const html = renderDashboard({
     events: [],
     authorized: true,
-    monitorStatus: "Monitoring 1 dishwasher",
+    monitorStatus: "Sledována 1 myčka",
     capsuleCount: 12,
     error: "",
     diagnostics: [{
@@ -118,6 +118,6 @@ test("does not treat stale remaining time as an active wash", () => {
     }],
   });
 
-  assert.match(html, /No wash in progress/);
-  assert.doesNotMatch(html, /Washing in progress/);
+  assert.match(html, /Právě neprobíhá mytí/);
+  assert.doesNotMatch(html, /Probíhá mytí/);
 });

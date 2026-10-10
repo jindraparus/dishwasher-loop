@@ -72,7 +72,7 @@ app.get("/auth/callback", async (request, response, next) => {
       return;
     }
     if (typeof code !== "string" || typeof state !== "string" || !validState(request, state)) {
-      response.status(400).send("Invalid OAuth callback");
+      response.status(400).send("Neplatné zpětné volání OAuth");
       return;
     }
 
@@ -109,11 +109,13 @@ app.use((error, request, response, next) => {
   }
   if (request.path.startsWith("/api/")) {
     response.status(500).json({
-      error: "An unexpected error occurred. Check the service logs.",
+      error: "Došlo k neočekávané chybě. Zkontrolujte protokoly služby.",
     });
     return;
   }
-  response.status(500).type("text").send("An unexpected error occurred. Check the service logs.");
+  response.status(500).type("text").send(
+    "Došlo k neočekávané chybě. Zkontrolujte protokoly služby.",
+  );
 });
 
 const server = app.listen(config.port, () => {

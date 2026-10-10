@@ -16,14 +16,14 @@ export function renderProgramCard(diagnostics, now = Date.now()) {
   const running = isProgramActive(diagnostic, now);
   const program = diagnostic?.program;
   const programKey = program?.activeKey || program?.selectedKey;
-  const programName = programKey ? formatProgramName(programKey) : "Program unavailable";
+  const programName = programKey ? formatProgramName(programKey) : "Program není k dispozici";
 
   if (!running) {
     return `<section class="card program-card">
-      <div class="card-heading"><h2>Current program</h2><span class="icon" aria-hidden="true">◷</span></div>
-      <p class="program-state">${escapeHtml(formatValue(operationState || "Idle"))}</p>
-      <h3 class="program-name">No wash in progress</h3>
-      ${programKey ? `<p class="subtle">Selected program: ${escapeHtml(programName)}</p>` : `<p class="subtle">Program details will appear when a wash starts.</p>`}
+      <div class="card-heading"><h2>Aktuální program</h2><span class="icon" aria-hidden="true">◷</span></div>
+      <p class="program-state">${escapeHtml(formatValue(operationState || "Nečinná"))}</p>
+      <h3 class="program-name">Právě neprobíhá mytí</h3>
+      ${programKey ? `<p class="subtle">Vybraný program: ${escapeHtml(programName)}</p>` : `<p class="subtle">Podrobnosti programu se zobrazí po spuštění mytí.</p>`}
     </section>`;
   }
 
@@ -31,21 +31,21 @@ export function renderProgramCard(diagnostics, now = Date.now()) {
   const remainingSeconds = adjustedRemainingSeconds(program, now);
   const estimatedFinish = remainingSeconds === null
     ? ""
-    : new Date(now + remainingSeconds * 1000).toLocaleTimeString([], {
+    : new Date(now + remainingSeconds * 1000).toLocaleTimeString("cs-CZ", {
       hour: "2-digit",
       minute: "2-digit",
     });
 
   return `<section class="card program-card">
-    <div class="card-heading"><h2>Current program</h2><span class="icon" aria-hidden="true">◷</span></div>
-    <p class="program-state">Washing in progress</p>
+    <div class="card-heading"><h2>Aktuální program</h2><span class="icon" aria-hidden="true">◷</span></div>
+    <p class="program-state">Probíhá mytí</p>
     <h3 class="program-name">${escapeHtml(programName)}</h3>
-    ${progress === null ? "" : `<progress class="program-progress" max="100" value="${progress}" aria-label="Program progress">${progress}%</progress>`}
+    ${progress === null ? "" : `<progress class="program-progress" max="100" value="${progress}" aria-label="Průběh programu">${progress}%</progress>`}
     <div class="program-metrics">
-      <div class="program-metric"><span>Remaining</span><strong>${escapeHtml(remainingSeconds === null ? "Waiting for update" : formatDuration(remainingSeconds))}</strong></div>
-      <div class="program-metric"><span>Estimated finish</span><strong>${escapeHtml(estimatedFinish || "Waiting for update")}</strong></div>
-      ${progress === null ? "" : `<div class="program-metric"><span>Progress</span><strong>${progress}%</strong></div>`}
-      <div class="program-metric"><span>Appliance</span><strong>${escapeHtml(diagnostic?.name || "Dishwasher")}</strong></div>
+      <div class="program-metric"><span>Zbývá</span><strong>${escapeHtml(remainingSeconds === null ? "Čeká se na aktualizaci" : formatDuration(remainingSeconds))}</strong></div>
+      <div class="program-metric"><span>Odhad dokončení</span><strong>${escapeHtml(estimatedFinish || "Čeká se na aktualizaci")}</strong></div>
+      ${progress === null ? "" : `<div class="program-metric"><span>Průběh</span><strong>${progress}%</strong></div>`}
+      <div class="program-metric"><span>Spotřebič</span><strong>${escapeHtml(diagnostic?.name || "Myčka nádobí")}</strong></div>
     </div>
   </section>`;
 }

@@ -17,7 +17,7 @@ export class DishwasherMonitor {
     };
     this.controller = null;
     this.running = false;
-    this.status = "Not connected";
+    this.status = "Nepřipojeno";
     this.diagnostics = [];
   }
 
@@ -32,7 +32,7 @@ export class DishwasherMonitor {
     this.running = false;
     this.controller?.abort();
     this.controller = null;
-    this.status = "Not connected";
+    this.status = "Nepřipojeno";
     this.diagnostics = [];
   }
 
@@ -50,12 +50,12 @@ export class DishwasherMonitor {
       try {
         const dishwashers = await this.client.listDishwashers();
         if (dishwashers.length === 0) {
-          this.status = "Connected, but no dishwasher was found";
+          this.status = "Připojeno, ale nebyla nalezena žádná myčka";
           await delay(60_000, signal);
           continue;
         }
 
-        this.status = `Monitoring ${dishwashers.length} dishwasher${dishwashers.length === 1 ? "" : "s"}`;
+        this.status = monitoredDishwashersLabel(dishwashers.length);
         await this.loadDiagnostics(dishwashers);
         await this.monitorAll(dishwashers, signal);
         retryDelay = 1_000;
@@ -64,11 +64,11 @@ export class DishwasherMonitor {
           return;
         }
         if (error instanceof AuthenticationRequiredError) {
-          this.status = "Authorization required";
+          this.status = "Je vyžadována autorizace";
           this.running = false;
           return;
         }
-        this.status = `Reconnecting after an error: ${error.message}`;
+        this.status = `Opětovné připojení po chybě: ${error.message}`;
         this.logger.error("Home Connect monitor error", error);
         await delay(retryDelay, signal);
         retryDelay = Math.min(retryDelay * 2, 60_000);
@@ -89,9 +89,9 @@ export class DishwasherMonitor {
 
       return {
         id: appliance.haId,
-        name: appliance.name || appliance.brand || "Dishwasher",
+        name: appliance.name || appliance.brand || "Myčka nádobí",
         brand: appliance.brand || "",
-        type: appliance.type || "Dishwasher",
+        type: appliance.type || "Myčka nádobí",
         model: appliance.enumber || appliance.vib || "",
         connected: appliance.connected,
         statusItems,
@@ -145,7 +145,7 @@ export class DishwasherMonitor {
   async monitorAppliance(appliance, signal) {
     const response = await this.client.openEventStream(appliance.haId, signal);
     if (!response.body) {
-      throw new Error("Home Connect event stream returned no response body");
+      throw new Error("Proud událostí Home Connect nevrátil tělo odpovědi");
     }
 
     await consumeSse(response.body, async (message) => {
@@ -155,7 +155,7 @@ export class DishwasherMonitor {
       }
       await this.storage.saveEvent({
         applianceId: appliance.haId,
-        applianceName: appliance.name || appliance.brand || "Dishwasher",
+        applianceName: appliance.name || appliance.brand || "Myčka nádobí",
         eventType: message.event,
         eventId: message.id,
         data: message.data,
@@ -163,7 +163,7 @@ export class DishwasherMonitor {
     }, signal);
 
     if (!signal.aborted) {
-      throw new Error(`Event stream for ${appliance.name || appliance.haId} ended`);
+      throw new Error(`Proud událostí pro ${appliance.name || appliance.haId} skončil`);
     }
   }
 
@@ -224,21 +224,21 @@ function updateProgram(program, item, receivedAt) {
 
 export function consumableStatus(value) {
   if (value === false) {
-    return { state: "ok", label: "Enough" };
+    return { state: "ok", label: "Dostatek" };
   }
   if (value === true) {
-    return { state: "low", label: "Refill soon" };
+    return { state: "low", label: "Brzy doplnit" };
   }
 
   const state = String(value ?? "").split(".").at(-1).toLowerCase();
   if (state === "off") {
-    return { state: "ok", label: "Enough" };
+    return { state: "ok", label: "Dostatek" };
   }
   if (state === "present") {
-    return { state: "low", label: "Refill soon" };
+    return { state: "low", label: "Brzy doplnit" };
   }
   if (state === "confirmed") {
-    return { state: "low", label: "Refill soon (warning acknowledged)" };
+    return { state: "low", label: "Brzy doplnit (upozornění potvrzeno)" };
   }
   return unknownConsumableStatus();
 }
@@ -255,7 +255,17 @@ export function shouldPersistEvent(message, filter) {
 }
 
 function unknownConsumableStatus() {
-  return { state: "unknown", label: "Unknown - waiting for appliance event" };
+  return { state: "unknown", label: "Neznámé – čeká se na událost spotřebiče" };
+}
+
+function monitoredDishwashersLabel(count) {
+  if (count === 1) {
+    return "Sledována 1 myčka";
+  }
+  if (count >= 2 && count <= 4) {
+    return `Sledovány ${count} myčky`;
+  }
+  return `Sledováno ${count} myček`;
 }
 
 function delay(milliseconds, signal) {

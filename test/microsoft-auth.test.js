@@ -50,7 +50,7 @@ test("rejects a different authenticated Microsoft account", () => {
   }, response, () => assert.fail("Unauthorized user reached the application"));
 
   assert.equal(response.statusCode, 403);
-  assert.equal(response.body, "This Microsoft account is not authorized.");
+  assert.equal(response.body, "Tento účet Microsoft nemá oprávnění.");
 });
 
 test("rejects requests without an App Service identity", () => {
@@ -66,7 +66,7 @@ test("rejects requests without an App Service identity", () => {
   });
 
   assert.equal(response.statusCode, 401);
-  assert.equal(response.body, "Microsoft authentication is required.");
+  assert.equal(response.body, "Je vyžadováno přihlášení přes Microsoft.");
 });
 
 test("authorizes the configured Entra principal ID instead of an unreliable guest email", () => {

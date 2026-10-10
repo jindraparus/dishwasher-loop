@@ -28,10 +28,10 @@ export function renderDashboardError(message) {
     <header class="topbar">
       <div class="brand">
         <div class="brand-mark" aria-hidden="true">◌</div>
-        <div><p class="eyebrow">Home care</p><h1>Dishwasher Loop</h1></div>
+        <div><p class="eyebrow">Péče o domácnost</p><h1>Dishwasher Loop</h1></div>
       </div>
     </header>
     <p class="error" role="alert">${escapeHtml(message)}</p>
-    <button class="button" type="button" data-retry>Try again</button>
+    <button class="button" type="button" data-retry>Zkusit znovu</button>
   </div>`;
 }
