@@ -45,19 +45,19 @@ test("keeps only messages containing a selected item key", () => {
 test("maps dishwasher consumable warning states", () => {
   assert.deepEqual(consumableStatus("BSH.Common.EnumType.EventPresentState.Off"), {
     state: "ok",
-    label: "Enough",
+    label: "Dostatek",
   });
   assert.deepEqual(consumableStatus("BSH.Common.EnumType.EventPresentState.Present"), {
     state: "low",
-    label: "Refill soon",
+    label: "Brzy doplnit",
   });
   assert.deepEqual(consumableStatus("BSH.Common.EnumType.EventPresentState.Confirmed"), {
     state: "low",
-    label: "Refill soon (warning acknowledged)",
+    label: "Brzy doplnit (upozornění potvrzeno)",
   });
   assert.deepEqual(consumableStatus("unexpected"), {
     state: "unknown",
-    label: "Unknown - waiting for appliance event",
+    label: "Neznámé – čeká se na událost spotřebiče",
   });
 });
 
@@ -87,6 +87,109 @@ test("restores the latest persisted salt warning into diagnostics", async () => 
 
   assert.deepEqual(monitor.getDiagnostics()[0].consumables.salt, {
     state: "low",
-    label: "Refill soon",
+    label: "Brzy doplnit",
+  });
+});
+
+test("restores current program details from persisted notifications", async () => {
+  const monitor = new DishwasherMonitor({
+    getApplianceStatus: async () => [{
+      key: "BSH.Common.Status.OperationState",
+      value: "BSH.Common.EnumType.OperationState.Run",
+    }],
+  }, {
+    listEvents: async () => [{
+      applianceId: "dishwasher-1",
+      eventType: "NOTIFY",
+      receivedAt: "2026-10-10T20:00:00.000Z",
+      data: {
+        items: [
+          {
+            key: "BSH.Common.Root.ActiveProgram",
+            value: "Dishcare.Dishwasher.Program.Eco50",
+          },
+          {
+            key: "BSH.Common.Option.ProgramProgress",
+            value: 37,
+            unit: "%",
+          },
+          {
+            key: "BSH.Common.Option.RemainingProgramTime",
+            value: 6240,
+            unit: "seconds",
+          },
+        ],
+      },
+    }],
+  });
+
+  await monitor.loadDiagnostics([{
+    haId: "dishwasher-1",
+    name: "Kitchen dishwasher",
+    type: "Dishwasher",
+    connected: true,
+  }]);
+
+  assert.deepEqual(monitor.getDiagnostics()[0].program, {
+    activeKey: "Dishcare.Dishwasher.Program.Eco50",
+    selectedKey: "",
+    progress: 37,
+    remainingSeconds: 6240,
+    remainingUpdatedAt: "2026-10-10T20:00:00.000Z",
+  });
+});
+
+test("clears stale program timing when the active program ends", async () => {
+  const monitor = new DishwasherMonitor({
+    getApplianceStatus: async () => [{
+      key: "BSH.Common.Status.OperationState",
+      value: "BSH.Common.EnumType.OperationState.Ready",
+    }],
+  }, {
+    listEvents: async () => [
+      {
+        applianceId: "dishwasher-1",
+        eventType: "NOTIFY",
+        receivedAt: "2026-10-10T20:30:00.000Z",
+        data: {
+          items: [{
+            key: "BSH.Common.Root.ActiveProgram",
+            value: null,
+          }],
+        },
+      },
+      {
+        applianceId: "dishwasher-1",
+        eventType: "NOTIFY",
+        receivedAt: "2026-10-10T20:29:00.000Z",
+        data: {
+          items: [
+            {
+              key: "BSH.Common.Option.ProgramProgress",
+              value: 99,
+            },
+            {
+              key: "BSH.Common.Option.RemainingProgramTime",
+              value: 60,
+            },
+          ],
+        },
+      },
+    ],
+  });
+
+  await monitor.loadDiagnostics([{
+    haId: "dishwasher-1",
+    name: "Kitchen dishwasher",
+    type: "Dishwasher",
+    connected: true,
+  }]);
+
+  assert.deepEqual(monitor.getDiagnostics()[0].program, {
+    activeKey: "",
+    selectedKey: "",
+    progress: null,
+    remainingSeconds: 0,
+    remainingUpdatedAt: "2026-10-10T20:30:00.000Z",
   });
 });

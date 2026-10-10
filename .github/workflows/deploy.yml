@@ -33,7 +33,7 @@ jobs:
         run: npm test
 
       - name: Build deployment package
-        run: zip -q -r app.zip package.json package-lock.json src
+        run: zip -q -r app.zip package.json package-lock.json src public
 
       - name: Sign in to Azure with OIDC
         uses: azure/login@v2

@@ -97,7 +97,7 @@ export class HomeConnectClient {
 
     if (!response.ok) {
       const detail = await response.text();
-      throw new Error(`Home Connect request failed (${response.status}): ${detail}`);
+      throw new Error(`Požadavek Home Connect selhal (${response.status}): ${detail}`);
     }
     return response;
   }
@@ -127,11 +127,11 @@ export class HomeConnectClient {
     const body = await parseJsonResponse(response);
     if (!response.ok) {
       throw new Error(
-        `Home Connect token request failed (${response.status}): ${JSON.stringify(body)}`,
+        `Požadavek Home Connect na token selhal (${response.status}): ${JSON.stringify(body)}`,
       );
     }
     if (!body.access_token || !(body.refresh_token || previousRefreshToken) || !body.expires_in) {
-      throw new Error("Home Connect returned an incomplete token response");
+      throw new Error("Home Connect vrátil neúplnou odpověď s tokenem");
     }
 
     return {
@@ -144,7 +144,7 @@ export class HomeConnectClient {
 
 export class AuthenticationRequiredError extends Error {
   constructor() {
-    super("Home Connect authorization is required");
+    super("Je vyžadována autorizace Home Connect");
     this.name = "AuthenticationRequiredError";
   }
 }
@@ -157,6 +157,6 @@ async function parseJsonResponse(response) {
   try {
     return JSON.parse(text);
   } catch {
-    throw new Error(`Home Connect returned invalid JSON (${response.status})`);
+    throw new Error(`Home Connect vrátil neplatný JSON (${response.status})`);
   }
 }

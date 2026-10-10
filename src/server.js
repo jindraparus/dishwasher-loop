@@ -1,14 +1,16 @@
 import "dotenv/config";
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+import { fileURLToPath } from "node:url";
 import express from "express";
 import { loadConfig } from "./config.js";
-import { renderPage } from "./html.js";
 import { HomeConnectClient } from "./home-connect.js";
 import { requireAllowedMicrosoftUser } from "./microsoft-auth.js";
 import { DishwasherMonitor } from "./monitor.js";
 import { Storage } from "./storage.js";
 
 const config = loadConfig();
+const indexPath = fileURLToPath(new URL("../public/index.html", import.meta.url));
+const publicPath = fileURLToPath(new URL("../public", import.meta.url));
 const storage = new Storage(config.storageConnectionString, config.tableName);
 await storage.initialize();
 
@@ -31,16 +33,20 @@ app.get("/healthz", (request, response) => {
 
 app.use(requireAllowedMicrosoftUser(config));
 
-app.get("/", async (request, response, next) => {
+app.get("/api/dashboard", async (request, response, next) => {
   try {
-    const [events, tokens] = await Promise.all([storage.listEvents(), storage.getTokens()]);
-    response.type("html").send(renderPage({
+    const [events, tokens, capsuleCount] = await Promise.all([
+      storage.listEvents(),
+      storage.getTokens(),
+      storage.getCapsuleCount(),
+    ]);
+    response.json({
       events,
       authorized: Boolean(tokens),
       monitorStatus: monitor.getStatus(),
       diagnostics: monitor.getDiagnostics(),
-      error: typeof request.query.error === "string" ? request.query.error : "",
-    }));
+      capsuleCount,
+    });
   } catch (error) {
     next(error);
   }
@@ -66,7 +72,7 @@ app.get("/auth/callback", async (request, response, next) => {
       return;
     }
     if (typeof code !== "string" || typeof state !== "string" || !validState(request, state)) {
-      response.status(400).send("Invalid OAuth callback");
+      response.status(400).send("Neplatné zpětné volání OAuth");
       return;
     }
 
@@ -89,13 +95,27 @@ app.post("/auth/disconnect", async (request, response, next) => {
   }
 });
 
+app.use(express.static(publicPath, { index: false }));
+app.get("/", (request, response) => {
+  response.set("Cache-Control", "no-store");
+  response.sendFile(indexPath);
+});
+
 app.use((error, request, response, next) => {
   console.error(error);
   if (response.headersSent) {
     next(error);
     return;
   }
-  response.status(500).type("text").send("An unexpected error occurred. Check the service logs.");
+  if (request.path.startsWith("/api/")) {
+    response.status(500).json({
+      error: "Došlo k neočekávané chybě. Zkontrolujte protokoly služby.",
+    });
+    return;
+  }
+  response.status(500).type("text").send(
+    "Došlo k neočekávané chybě. Zkontrolujte protokoly služby.",
+  );
 });
 
 const server = app.listen(config.port, () => {

@@ -63,18 +63,32 @@ Connect does not grant access to the UI.
 
 ## 3. Runtime components
 
-### 3.1 Browser and server-rendered UI
+### 3.1 Browser single-page application
 
-The browser requests the root page from the Node service. The service reads the
-latest 200 persisted events and in-memory diagnostics, then returns one
-server-rendered HTML document. The page refreshes every 30 seconds.
+The Node service serves a static HTML shell, stylesheet, and native JavaScript
+ES modules from `public/`. The browser requests current state from the
+authenticated `GET /api/dashboard` endpoint and renders each dashboard tile
+through a focused client component. It refreshes data in place every 30 seconds
+without navigating or reloading the document.
+
+The dashboard API reads the optional capsule count from the shared persistence
+layer. Azure stores it in the `settings` / `supplies` Table Storage entity, while
+local development reads `capsuleCount` from `.data/dishwasher-loop.json`. The
+value must be a whole number from 0 through 999. Missing or invalid values are
+shown as unavailable. This version intentionally provides no UI or API for
+writing the value. OAuth login, callback, and disconnect remain full browser
+navigations because they cross an authentication boundary.
 
 The UI includes:
 
 - appliance name, brand, type, and model;
 - online/offline state;
 - current Home Connect status values;
+- active program, progress, adjusted remaining time, and estimated finish;
 - salt and rinse-aid refill warnings;
+- read-only washing-capsule inventory from shared storage;
+- recommendations derived from connectivity, operation state, warnings, and
+  capsule inventory;
 - the latest received event type and timestamp; and
 - raw payloads for persisted event history.
 
@@ -93,7 +107,8 @@ The service is an Express application running on Node.js 22. It owns:
 - SSE parsing and client-side filtering;
 - event persistence;
 - current diagnostics held in memory;
-- HTML rendering; and
+- authenticated dashboard and supply JSON APIs;
+- static SPA asset delivery; and
 - a data-free `/healthz` readiness endpoint.
 
 The service starts monitoring automatically when persisted Home Connect tokens
@@ -140,6 +155,7 @@ Azure Table Storage uses two partitions:
 | Partition key | Row key | Contents |
 |---|---|---|
 | `settings` | `oauth` | Home Connect access token, refresh token, and expiry |
+| `settings` | `supplies` | Optional read-only washing-capsule count |
 | `events` | timestamp plus UUID | Appliance identity, event metadata, receipt time, and JSON payload |
 
 Tokens and events survive App Service restarts. Azure Storage encrypts the
@@ -489,5 +505,5 @@ runtime code only.
   public API.
 - Salt and rinse-aid are warning states, not measured quantities.
 - The latest 200 events are rendered; there is no pagination or retention job.
-- The browser refreshes every 30 seconds; the browser itself does not receive a
-  live SSE stream.
+- The SPA polls dashboard state every 30 seconds; the browser itself does not
+  receive a live SSE stream.
