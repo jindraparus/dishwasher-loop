@@ -18,7 +18,7 @@ test("renders appliance metadata and current status diagnostics", () => {
       connected: true,
       statusItems: [{
         key: "BSH.Common.Status.OperationState",
-        value: "BSH.Common.EnumType.OperationState.Run",
+        value: "BSH.Common.EnumType.OperationState.Ready",
       }],
       program: {
         activeKey: "Dishcare.Dishwasher.Program.Eco50",
@@ -48,7 +48,7 @@ test("renders appliance metadata and current status diagnostics", () => {
   assert.match(html, /Recommendations/);
   assert.match(html, /Bosch · Dishwasher · SMV6/);
   assert.match(html, /Operation State/);
-  assert.match(html, /<dd>Run<\/dd>/);
+  assert.match(html, /<dd>Ready<\/dd>/);
   assert.match(html, /Dishwasher salt/);
   assert.match(html, /Washing capsules/);
   assert.match(html, /class="capsule-count ok">12</);
@@ -72,4 +72,37 @@ test("recommends restocking low supplies", () => {
     "Refill dishwasher salt",
     "Restock washing capsules",
   ]);
+});
+
+test("does not treat stale remaining time as an active wash", () => {
+  const html = renderPage({
+    events: [],
+    authorized: true,
+    monitorStatus: "Monitoring 1 dishwasher",
+    capsuleCount: 12,
+    error: "",
+    diagnostics: [{
+      id: "dishwasher-1",
+      name: "Kitchen dishwasher",
+      connected: true,
+      statusItems: [{
+        key: "BSH.Common.Status.OperationState",
+        value: "BSH.Common.EnumType.OperationState.Ready",
+      }],
+      program: {
+        activeKey: "",
+        selectedKey: "Dishcare.Dishwasher.Program.Eco50",
+        progress: 42,
+        remainingSeconds: 5760,
+        remainingUpdatedAt: new Date(Date.now() - 11 * 60 * 1000).toISOString(),
+      },
+      consumables: {},
+      statusError: "",
+      lastEventType: "",
+      lastEventAt: "",
+    }],
+  });
+
+  assert.match(html, /No wash in progress/);
+  assert.doesNotMatch(html, /Washing in progress/);
 });

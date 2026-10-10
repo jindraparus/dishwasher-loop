@@ -312,10 +312,12 @@ export function renderPage({
 </html>`;
 }
 
+const PROGRAM_ACTIVITY_MAX_AGE_MS = 10 * 60 * 1000;
+
 function renderProgram(diagnostics) {
   const diagnostic = diagnostics[0];
   const operationState = findStatusValue(diagnostic, ".OperationState");
-  const running = String(operationState).endsWith(".Run");
+  const running = isProgramActive(diagnostic);
   const program = diagnostic?.program;
   const programKey = program?.activeKey || program?.selectedKey;
   const programName = programKey ? formatProgramName(programKey) : "Program unavailable";
@@ -394,6 +396,22 @@ function adjustedRemainingSeconds(program) {
     ? Math.max(0, Math.floor((Date.now() - updatedAt) / 1000))
     : 0;
   return Math.max(0, Math.round(program.remainingSeconds - elapsed));
+}
+
+function isProgramActive(diagnostic) {
+  const operationState = findStatusValue(diagnostic, ".OperationState");
+  if (String(operationState).endsWith(".Run")) {
+    return true;
+  }
+
+  const program = diagnostic?.program;
+  const updatedAt = new Date(program?.remainingUpdatedAt).valueOf();
+  const age = Date.now() - updatedAt;
+  return Number.isFinite(program?.remainingSeconds)
+    && program.remainingSeconds > 0
+    && Number.isFinite(updatedAt)
+    && age >= 0
+    && age <= PROGRAM_ACTIVITY_MAX_AGE_MS;
 }
 
 function formatDuration(totalSeconds) {
@@ -499,10 +517,7 @@ export function buildRecommendations({ authorized, diagnostics, capsuleCount }) 
     });
   }
 
-  const operationState = diagnostic.statusItems.find(
-    (item) => String(item.key).endsWith(".OperationState"),
-  )?.value;
-  if (String(operationState).endsWith(".Run")) {
+  if (isProgramActive(diagnostic)) {
     recommendations.push({
       title: "Wash cycle in progress",
       text: "No action is needed while the current program is running.",
