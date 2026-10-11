@@ -225,28 +225,37 @@ test("ignores ProgramFinished Off and duplicate completion notifications", async
   assert.equal(storage.cycles.length, 1);
 });
 
-test("deduplicates a replayed finish event with a changed receipt time", async () => {
+test("processes distinct events that reuse the Home Connect appliance id", async () => {
   const storage = memoryStorage();
   const tracker = new CycleTracker(storage);
+  const applianceEventId = "dishwasher-1";
 
   await tracker.processEvent(message("2026-10-10T20:00:00.000Z", "NOTIFY", [
     item("BSH.Common.Root.ActiveProgram", "Dishcare.Dishwasher.Program.Auto2"),
-  ], "start"));
+  ], applianceEventId));
   await tracker.processEvent(message("2026-10-10T22:00:00.000Z", "EVENT", [
     item(
       "BSH.Common.Event.ProgramFinished",
       "BSH.Common.EnumType.EventPresentState.Present",
     ),
-  ], "finish"));
-  await tracker.processEvent(message("2026-10-11T08:00:00.000Z", "EVENT", [
+  ], applianceEventId));
+  await tracker.processEvent(message("2026-10-11T08:00:00.000Z", "NOTIFY", [
+    item("BSH.Common.Root.ActiveProgram", "Dishcare.Dishwasher.Program.Eco50"),
+  ], applianceEventId));
+  await tracker.processEvent(message("2026-10-11T10:00:00.000Z", "EVENT", [
     item(
       "BSH.Common.Event.ProgramFinished",
       "BSH.Common.EnumType.EventPresentState.Present",
     ),
-  ], "finish"));
+  ], applianceEventId));
 
-  assert.equal(tracker.cycles.size, 1);
-  assert.equal(storage.cycles.length, 1);
+  assert.equal(tracker.cycles.size, 2);
+  assert.equal(storage.cycles.length, 2);
+  assert.deepEqual(storage.cycles.map((cycle) => cycle.programKey), [
+    "Dishcare.Dishwasher.Program.Auto2",
+    "Dishcare.Dishwasher.Program.Eco50",
+  ]);
+  assert.ok(storage.cycles.every((cycle) => cycle.status === "finished"));
 });
 
 test("does not create a phantom cycle from post-finish reset telemetry", async () => {
@@ -334,15 +343,21 @@ test("restores an open cycle and records a disconnect gap", async () => {
 test("backfills ordered raw events idempotently", async () => {
   const storage = memoryStorage({
     events: [
-      message("2026-10-10T22:00:00.000Z", "EVENT", [
-        item(
-          "BSH.Common.Event.ProgramFinished",
-          "BSH.Common.EnumType.EventPresentState.Present",
-        ),
-      ], "finish"),
-      message("2026-10-10T20:00:00.000Z", "NOTIFY", [
-        item("BSH.Common.Root.ActiveProgram", "Dishcare.Dishwasher.Program.Eco50"),
-      ], "start"),
+      {
+        ...message("2026-10-10T22:00:00.000Z", "EVENT", [
+          item(
+            "BSH.Common.Event.ProgramFinished",
+            "BSH.Common.EnumType.EventPresentState.Present",
+          ),
+        ], "dishwasher-1"),
+        storageId: "event-2",
+      },
+      {
+        ...message("2026-10-10T20:00:00.000Z", "NOTIFY", [
+          item("BSH.Common.Root.ActiveProgram", "Dishcare.Dishwasher.Program.Eco50"),
+        ], "dishwasher-1"),
+        storageId: "event-1",
+      },
     ],
   });
 
@@ -352,6 +367,32 @@ test("backfills ordered raw events idempotently", async () => {
   assert.deepEqual(first, { events: 2, cycles: 1, complete: 1, incomplete: 0 });
   assert.deepEqual(second, first);
   assert.equal(storage.cycles.length, 1);
+  assert.deepEqual(storage.cycles[0].sourceEventIds, [
+    "storage:event-1",
+    "storage:event-2",
+  ]);
+});
+
+test("backfills events without storage ids using receipt-scoped identities", async () => {
+  const storage = memoryStorage({
+    events: [
+      message("2026-10-10T22:00:00.000Z", "EVENT", [
+        item(
+          "BSH.Common.Event.ProgramFinished",
+          "BSH.Common.EnumType.EventPresentState.Present",
+        ),
+      ], "dishwasher-1"),
+      message("2026-10-10T20:00:00.000Z", "NOTIFY", [
+        item("BSH.Common.Root.ActiveProgram", "Dishcare.Dishwasher.Program.Eco50"),
+      ], "dishwasher-1"),
+    ],
+  });
+
+  const report = await backfillCycleHistory(storage, { info() {} });
+
+  assert.deepEqual(report, { events: 2, cycles: 1, complete: 1, incomplete: 0 });
+  assert.equal(storage.cycles.length, 1);
+  assert.equal(storage.cycles[0].status, "finished");
 });
 
 test("builds timezone-aware weekly and monthly statistics", () => {

@@ -589,8 +589,8 @@ function cycleId(applianceId, boundary) {
 }
 
 function eventIdentity(event) {
-  if (event.eventId) {
-    return `id:${event.eventId}`;
+  if (event.storageId) {
+    return `storage:${event.storageId}`;
   }
   return `hash:${createHash("sha256")
     .update(JSON.stringify([

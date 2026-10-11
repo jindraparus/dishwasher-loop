@@ -171,7 +171,9 @@ aid, can be restored after a process restart.
 
 Cycle history replays all persisted events chronologically during startup
 through the same state machine used for live events. Deterministic cycle IDs and
-upserts make this backfill idempotent. Existing source events are never changed.
+upserts make this backfill idempotent. Persisted Azure events use their Table
+Storage row keys as source identities because Home Connect reuses the appliance
+ID in the SSE `id` field. Existing source events are never changed.
 
 Cycle timestamps distinguish exact observed boundaries from partial knowledge:
 
