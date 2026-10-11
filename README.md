@@ -100,28 +100,28 @@ read OAuth tokens directly, or control the appliance.
 
 ### Add local dishwasher documentation
 
-Create the default documentation directory:
-
-```sh
-mkdir -p .data/dishwasher-docs
-```
-
-Copy dishwasher manuals, program descriptions, maintenance instructions, or
-troubleshooting guidance into that directory. Files can be organized in nested
-directories. Supported formats are:
+The default documentation directory is `docs/dishwasher`. Copy dishwasher
+manuals, program descriptions, maintenance instructions, or troubleshooting
+guidance into that directory. Files can be organized in nested directories.
+Supported formats are:
 
 - Markdown (`.md` and `.markdown`)
 - plain text (`.txt`)
 - PDF (`.pdf`)
 
-The `.data` directory is ignored by Git, so local manuals are not committed or
-deployed. PDF files must contain extractable text; image-only scanned manuals
-need OCR before the agent can search them. Individual documentation files are
-limited to 25 MB.
+Documentation in `docs/dishwasher` can be committed and shared with the
+repository. Commit only documents whose license permits redistribution; do not
+commit manuals containing private or sensitive information. The Azure
+deployment package does not include the `docs` directory.
+
+PDF files must contain extractable text; image-only scanned manuals need OCR
+before the agent can search them. Individual documentation files are limited to
+25 MB.
 
 To use another location, change `DISHWASHER_DOCUMENTS_DIR` in
-`.vscode/mcp.json`. The directory may be outside the repository, but only files
-inside that configured directory are available to the MCP tools.
+`.vscode/mcp.json`. Use an ignored or external directory for documentation that
+must remain private. The directory may be outside the repository, but only
+files inside that configured directory are available to the MCP tools.
 
 ### Start and use the agent
 
@@ -164,7 +164,7 @@ documentation and inference.
 - **Home Connect is not authorized:** open the local dashboard and complete the
   Home Connect connection.
 - **Documentation directory does not exist:** create
-  `.data/dishwasher-docs`, or update `DISHWASHER_DOCUMENTS_DIR` in
+  `docs/dishwasher`, or update `DISHWASHER_DOCUMENTS_DIR` in
   `.vscode/mcp.json`.
 - **No supported documentation found:** add at least one supported text or PDF
   file.

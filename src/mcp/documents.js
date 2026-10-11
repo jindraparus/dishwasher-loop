@@ -7,7 +7,7 @@ const MAX_DOCUMENT_BYTES = 25 * 1024 * 1024;
 const DEFAULT_MAX_CHARACTERS = 12_000;
 
 export class DishwasherDocuments {
-  constructor(root = process.env.DISHWASHER_DOCUMENTS_DIR || ".data/dishwasher-docs") {
+  constructor(root = process.env.DISHWASHER_DOCUMENTS_DIR || "docs/dishwasher") {
     this.root = path.resolve(root);
   }
 
