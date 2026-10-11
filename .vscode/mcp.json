@@ -2,13 +2,11 @@
   "servers": {
     "dishwasher-loop": {
       "type": "stdio",
-      "command": "/usr/bin/env",
+      "command": "/bin/sh",
       "args": [
-        "node",
-        "${workspaceFolder}/src/mcp/server.js"
+        "${workspaceFolder}/scripts/start-mcp.sh"
       ],
       "env": {
-        "PATH": "${env:PATH}",
         "DISHWASHER_LOOP_BASE_URL": "http://localhost:3000",
         "DISHWASHER_DOCUMENTS_DIR": "${workspaceFolder}/.data/dishwasher-docs"
       }

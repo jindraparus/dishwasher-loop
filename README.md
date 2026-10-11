@@ -171,7 +171,7 @@ documentation and inference.
 - **PDF text is missing:** use a text-based PDF or run OCR on the scanned manual.
 - **Tools do not appear in Copilot Chat:** restart the **dishwasher-loop** MCP
   server from VS Code, then reselect the **Dishwasher Advisor** agent.
-- **Server fails with `No such file or directory`:** verify that `node` is on
-  the `PATH` visible to VS Code by running `node --version` in its integrated
-  terminal. The workspace launches through `/usr/bin/env` so the configured
-  environment can resolve Node.
+- **Server cannot find Node.js:** the launcher checks standard Homebrew,
+  `/usr/local`, and system locations without relying on VS Code's `PATH`. For a
+  different installation, set `NODE_BINARY` to the absolute Node.js executable
+  path in the MCP server's `env` object.
