@@ -2,11 +2,11 @@
   "servers": {
     "dishwasher-loop": {
       "type": "stdio",
-      "command": "node",
+      "command": "/usr/bin/env",
       "args": [
+        "node",
         "${workspaceFolder}/src/mcp/server.js"
       ],
-      "cwd": "${workspaceFolder}",
       "env": {
         "PATH": "${env:PATH}",
         "DISHWASHER_LOOP_BASE_URL": "http://localhost:3000",

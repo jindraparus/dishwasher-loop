@@ -173,4 +173,5 @@ documentation and inference.
   server from VS Code, then reselect the **Dishwasher Advisor** agent.
 - **Server fails with `No such file or directory`:** verify that `node` is on
   the `PATH` visible to VS Code by running `node --version` in its integrated
-  terminal, then restart VS Code from an environment that initializes Node.
+  terminal. The workspace launches through `/usr/bin/env` so the configured
+  environment can resolve Node.
