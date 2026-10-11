@@ -171,3 +171,6 @@ documentation and inference.
 - **PDF text is missing:** use a text-based PDF or run OCR on the scanned manual.
 - **Tools do not appear in Copilot Chat:** restart the **dishwasher-loop** MCP
   server from VS Code, then reselect the **Dishwasher Advisor** agent.
+- **Server fails with `No such file or directory`:** verify that `node` is on
+  the `PATH` visible to VS Code by running `node --version` in its integrated
+  terminal, then restart VS Code from an environment that initializes Node.
