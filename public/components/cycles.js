@@ -79,10 +79,12 @@ function cycleStatus(cycle) {
   if (cycle.status === "running") {
     return { label: "Probíhá", tone: "running" };
   }
-  if (cycle.status === "finished" && cycle.startedAt && cycle.finishedAt) {
+  if (cycle.status === "finished"
+    && cycle.startConfidence === "observed"
+    && cycle.finishConfidence === "observed") {
     return { label: "Dokončeno", tone: "finished" };
   }
-  if (cycle.status === "finished") {
+  if (cycle.status === "finished" && cycle.result === "finished") {
     return { label: "Dokončeno, neúplná data", tone: "incomplete" };
   }
   return { label: "Neúplný záznam", tone: "incomplete" };

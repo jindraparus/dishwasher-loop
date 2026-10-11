@@ -158,6 +158,31 @@ test("eventually resolves a lone terminal signal as incomplete", async () => {
   assert.equal(storage.cycles[0].finishedAt, null);
 });
 
+test("upgrades a timed-out incomplete cycle when a delayed strong finish arrives", async () => {
+  const storage = memoryStorage();
+  const tracker = new CycleTracker(storage, console, { terminalWindowMs: 5 });
+
+  await tracker.processEvent(message("2026-10-10T20:00:00.000Z", "NOTIFY", [
+    item("BSH.Common.Root.ActiveProgram", "Dishcare.Dishwasher.Program.Eco50"),
+  ]));
+  await tracker.processEvent(message(new Date().toISOString(), "NOTIFY", [
+    item("BSH.Common.Root.ActiveProgram", null),
+  ]));
+  await new Promise((resolve) => setTimeout(resolve, 15));
+  await tracker.processEvent(message(new Date().toISOString(), "EVENT", [
+    item(
+      "BSH.Common.Event.ProgramFinished",
+      "BSH.Common.EnumType.EventPresentState.Present",
+    ),
+  ], "delayed-finish"));
+
+  assert.equal(storage.cycles.length, 1);
+  assert.equal(storage.cycles[0].status, "finished");
+  assert.equal(storage.cycles[0].result, "finished");
+  assert.equal(storage.cycles[0].finishConfidence, "observed");
+  assert.match(storage.cycles[0].finishedAt, /^\d{4}-\d{2}-\d{2}T/);
+});
+
 test("completes with lower confidence from two correlated terminal signals", async () => {
   const storage = memoryStorage();
   const tracker = new CycleTracker(storage);
@@ -172,6 +197,7 @@ test("completes with lower confidence from two correlated terminal signals", asy
 
   assert.equal(storage.cycles[0].status, "finished");
   assert.equal(storage.cycles[0].finishConfidence, "inferred");
+  assert.equal(storage.cycles[0].durationSeconds, null);
   assert.deepEqual(storage.cycles[0].finishEvidence, ["correlated-terminal-signals"]);
 });
 

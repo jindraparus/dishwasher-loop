@@ -72,7 +72,7 @@ export class CycleTracker {
 
     const activeProgramStarted = signals.activeProgram
       && signals.activeProgram !== state.lastActiveProgram
-      && event.eventType === "NOTIFY";
+      && String(event.eventType).toUpperCase() === "NOTIFY";
     const operationStarted = signals.operationRun
       && state.lastOperationState
       && !String(state.lastOperationState).endsWith(RUN);
@@ -125,15 +125,20 @@ export class CycleTracker {
           state.lastClosed = cycle;
           this.clearTerminalTimer(cycle.cycleId);
           changed = true;
-        } else if (cycle.pendingTerminalSignals.length > 0) {
+        } else if (persist && cycle.pendingTerminalSignals.length > 0) {
           this.scheduleTerminalResolution(cycle);
         }
       }
     } else if (signals.programFinished || signals.operationFinished) {
-      if (isRecentCycle(state.lastClosed, at, this.terminalWindowMs)) {
-        const evidence = signals.programFinished
-          ? "program-finished"
-          : "operation-finished";
+      const evidence = signals.programFinished
+        ? "program-finished"
+        : "operation-finished";
+      if (state.lastClosed?.status === "incomplete"
+        && state.lastClosed.result === "unknown") {
+        finishCycle(state.lastClosed, at, evidence, "observed", sourceId);
+        cycle = state.lastClosed;
+        changed = true;
+      } else if (isRecentCycle(state.lastClosed, at, this.terminalWindowMs)) {
         changed = addUnique(state.lastClosed.finishEvidence, evidence);
         changed = addUnique(state.lastClosed.sourceEventIds, sourceId) || changed;
         state.lastClosed.lastObservedAt = maxTimestamp(state.lastClosed.lastObservedAt, at);
@@ -257,6 +262,25 @@ export class CycleTracker {
       this.terminalTimers.delete(cycleId);
     }
   }
+
+  async resolveExpiredTerminals(at = new Date().toISOString(), persist = true) {
+    const reference = Date.parse(normalizeTimestamp(at));
+    for (const state of this.states.values()) {
+      const cycle = state.open;
+      if (!cycle || cycle.pendingTerminalSignals.length === 0) {
+        continue;
+      }
+      const latestSignal = cycle.pendingTerminalSignals
+        .map((signal) => Date.parse(signal.observedAt))
+        .reduce((latest, value) => Math.max(latest, value), 0);
+      if (latestSignal + this.terminalWindowMs > reference) {
+        continue;
+      }
+      await this.closeIncomplete(cycle, cycle.lastObservedAt, "unknown", persist);
+      state.open = null;
+      state.lastClosed = cycle;
+    }
+  }
 }
 
 export async function backfillCycleHistory(storage, logger = console, options = {}) {
@@ -269,6 +293,7 @@ export async function backfillCycleHistory(storage, logger = console, options = 
   for (const event of events) {
     await tracker.processEvent(event, { persist: false });
   }
+  await tracker.resolveExpiredTerminals(new Date().toISOString(), false);
   const cycles = [...tracker.cycles.values()];
   for (const cycle of cycles) {
     await storage.saveCycle(cycle);
@@ -375,7 +400,7 @@ function extractSignals(items) {
     const value = item?.value;
     if (key.endsWith("Root.ActiveProgram")) {
       signals.hasActiveProgram = true;
-      signals.activeProgram = typeof value === "string" ? value : null;
+      signals.activeProgram = typeof value === "string" && value ? value : null;
       if (signals.activeProgram === null) {
         signals.terminalSignals.push("active-program-cleared");
       }
@@ -530,6 +555,8 @@ function finishCycle(cycle, at, evidence, confidence, sourceId) {
   addUnique(cycle.finishEvidence, evidence);
   addUnique(cycle.sourceEventIds, sourceId);
   cycle.durationSeconds = cycle.startedAt
+    && cycle.startConfidence === "observed"
+    && confidence === "observed"
     ? Math.max(0, Math.round((Date.parse(at) - Date.parse(cycle.startedAt)) / 1000))
     : null;
   cycle.pendingTerminalSignals = [];
@@ -548,6 +575,8 @@ function hasCompleteBoundaries(cycle) {
     cycle.result === "finished"
     && cycle.startedAt
     && cycle.finishedAt
+    && cycle.startConfidence === "observed"
+    && cycle.finishConfidence === "observed"
     && Number.isFinite(cycle.durationSeconds),
   );
 }

@@ -44,6 +44,8 @@ test("renders appliance metadata and current status diagnostics", () => {
       startedAt: "2026-10-09T18:00:00.000Z",
       finishedAt: "2026-10-09T21:00:00.000Z",
       durationSeconds: 10_800,
+      startConfidence: "observed",
+      finishConfidence: "observed",
     }],
     cycleStats: {
       week: {
