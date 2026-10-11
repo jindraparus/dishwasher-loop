@@ -88,3 +88,86 @@ HOME_CONNECT_EVENT_KEYS=BSH.Common.Event.ProgramFinished
 
 Filtering affects event history only; live status messages still update the
 diagnostics panel.
+
+## Local Copilot dishwasher agent
+
+The workspace includes a read-only MCP server and a **Dishwasher Advisor**
+Copilot agent. The agent combines live data from the locally running Dishwasher
+Loop API with dishwasher documentation stored on the same machine.
+
+The MCP integration is local-only. It does not connect to the Azure deployment,
+read OAuth tokens directly, or control the appliance.
+
+### Add local dishwasher documentation
+
+Create the default documentation directory:
+
+```sh
+mkdir -p .data/dishwasher-docs
+```
+
+Copy dishwasher manuals, program descriptions, maintenance instructions, or
+troubleshooting guidance into that directory. Files can be organized in nested
+directories. Supported formats are:
+
+- Markdown (`.md` and `.markdown`)
+- plain text (`.txt`)
+- PDF (`.pdf`)
+
+The `.data` directory is ignored by Git, so local manuals are not committed or
+deployed. PDF files must contain extractable text; image-only scanned manuals
+need OCR before the agent can search them. Individual documentation files are
+limited to 25 MB.
+
+To use another location, change `DISHWASHER_DOCUMENTS_DIR` in
+`.vscode/mcp.json`. The directory may be outside the repository, but only files
+inside that configured directory are available to the MCP tools.
+
+### Start and use the agent
+
+1. Install dependencies with `npm install`.
+2. Start Dishwasher Loop with `npm start`.
+3. Open http://localhost:3000 and connect Home Connect.
+4. In VS Code, open the MCP server list and start **dishwasher-loop** if it is
+   not already running. The workspace configuration starts
+   `src/mcp/server.js` over standard input/output.
+5. Open Copilot Chat and select **Dishwasher Advisor** from the agent picker.
+
+VS Code normally manages the MCP process. To start the same process manually
+for protocol clients or diagnostics, run:
+
+```sh
+npm run mcp
+```
+
+The process waits silently for MCP messages on standard input. The API base URL
+defaults to `http://localhost:3000` and can be changed with
+`DISHWASHER_LOOP_BASE_URL`. A different URL is configurable for development,
+but authenticated Azure access is not supported.
+
+Example questions:
+
+- Is the dishwasher running, and when should it finish?
+- Which supplies need attention?
+- What happened during the latest cycle?
+- According to the manual, how should I clean the filter?
+- What does the current status mean, and what should I do next?
+
+The agent cites the local document and section or PDF page used for
+documentation-based answers. It distinguishes live appliance state from
+documentation and inference.
+
+### MCP troubleshooting
+
+- **Unable to reach Dishwasher Loop:** start the web service with `npm start`
+  and verify that http://localhost:3000/healthz returns `{"ok":true}`.
+- **Home Connect is not authorized:** open the local dashboard and complete the
+  Home Connect connection.
+- **Documentation directory does not exist:** create
+  `.data/dishwasher-docs`, or update `DISHWASHER_DOCUMENTS_DIR` in
+  `.vscode/mcp.json`.
+- **No supported documentation found:** add at least one supported text or PDF
+  file.
+- **PDF text is missing:** use a text-based PDF or run OCR on the scanned manual.
+- **Tools do not appear in Copilot Chat:** restart the **dishwasher-loop** MCP
+  server from VS Code, then reselect the **Dishwasher Advisor** agent.

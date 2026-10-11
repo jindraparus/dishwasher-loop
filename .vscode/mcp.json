@@ -1,0 +1,16 @@
+{
+  "servers": {
+    "dishwasher-loop": {
+      "type": "stdio",
+      "command": "node",
+      "args": [
+        "${workspaceFolder}/src/mcp/server.js"
+      ],
+      "cwd": "${workspaceFolder}",
+      "env": {
+        "DISHWASHER_LOOP_BASE_URL": "http://localhost:3000",
+        "DISHWASHER_DOCUMENTS_DIR": "${workspaceFolder}/.data/dishwasher-docs"
+      }
+    }
+  }
+}
