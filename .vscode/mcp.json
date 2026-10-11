@@ -1,0 +1,15 @@
+{
+  "servers": {
+    "dishwasher-loop": {
+      "type": "stdio",
+      "command": "/bin/sh",
+      "args": [
+        "${workspaceFolder}/scripts/start-mcp.sh"
+      ],
+      "env": {
+        "DISHWASHER_LOOP_BASE_URL": "http://localhost:3000",
+        "DISHWASHER_DOCUMENTS_DIR": "${workspaceFolder}/docs/dishwasher"
+      }
+    }
+  }
+}
