@@ -6,9 +6,10 @@ Dishwasher Loop is a small Node.js service that:
 - discovers the account's dishwashers;
 - receives appliance updates over a long-lived Server-Sent Events connection;
 - persists status, event, and notification messages;
+- derives durable washing-cycle history from observed Home Connect signals;
 - shows a dashboard with current appliance diagnostics, active wash progress
   and remaining time, salt status, read-only washing-capsule inventory,
-  recommendations, and the latest 200 events;
+  recommendations, cycle statistics, recent cycles, and the latest 200 events;
 - updates the single-page dashboard in place without full-page refreshes; and
 - protects the Azure-hosted UI with Microsoft sign-in and an explicit user
   allowlist.
@@ -51,8 +52,8 @@ AZURE_STORAGE_CONNECTION_STRING=local
 ```
 
 Local mode stores OAuth tokens and event history in
-`.data/dishwasher-loop.json`. Microsoft authentication is disabled locally by
-default.
+`.data/dishwasher-loop.json`. Derived cycle history is stored in the same file.
+Microsoft authentication is disabled locally by default.
 
 Start the service:
 
@@ -87,7 +88,34 @@ HOME_CONNECT_EVENT_KEYS=BSH.Common.Event.ProgramFinished
 ```
 
 Filtering affects event history only; live status messages still update the
-diagnostics panel.
+diagnostics panel and cycle tracking. Cycle statistics use `Europe/Prague` by
+default. Set `CYCLE_TIMEZONE` to another IANA timezone if required.
+
+## Washing-cycle history
+
+Dishwasher Loop derives observed washing cycles from active-program,
+operation-state, progress, remaining-time, and program-finished messages.
+Strong start and finish boundaries produce complete duration records. If
+monitoring begins or ends mid-cycle, the record remains explicitly incomplete
+instead of receiving an invented timestamp.
+
+On startup, persisted raw events are replayed chronologically through the same
+state machine used for live events. The backfill is idempotent and does not
+modify source events. Home Connect does not provide historical replay, so cycles
+that occurred while no Dishwasher Loop monitor was connected cannot be
+recovered.
+
+Authenticated cycle APIs:
+
+```text
+GET /api/cycles?limit=50
+GET /api/cycles/stats?period=week
+GET /api/cycles/stats?period=month
+```
+
+Limits must be between 1 and 100. Statistics report completed and incomplete
+records separately and calculate durations only from cycles with trustworthy
+start and finish boundaries.
 
 ## Local Copilot dishwasher agent
 

@@ -105,6 +105,10 @@ resource app 'Microsoft.Web/sites@2023-12-01' = {
           value: 'DishwasherLoop'
         }
         {
+          name: 'CYCLE_TIMEZONE'
+          value: 'Europe/Prague'
+        }
+        {
           name: 'SCM_DO_BUILD_DURING_DEPLOYMENT'
           value: 'true'
         }

@@ -28,3 +28,20 @@ test("accepts the legacy singular principal ID setting", () => {
 
   assert.deepEqual(config.allowedPrincipalIds, ["legacy-id"]);
 });
+
+test("uses the Czech timezone for cycle statistics by default", () => {
+  const config = loadConfig({
+    ...baseEnvironment,
+    APP_ALLOWED_PRINCIPAL_ID: "principal-id",
+  });
+
+  assert.equal(config.cycleTimezone, "Europe/Prague");
+});
+
+test("rejects an invalid cycle statistics timezone", () => {
+  assert.throws(() => loadConfig({
+    ...baseEnvironment,
+    APP_ALLOWED_PRINCIPAL_ID: "principal-id",
+    CYCLE_TIMEZONE: "not-a-timezone",
+  }), /Invalid CYCLE_TIMEZONE/);
+});
