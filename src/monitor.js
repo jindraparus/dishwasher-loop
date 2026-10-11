@@ -7,7 +7,7 @@ const CONSUMABLE_EVENTS = {
 };
 
 export class DishwasherMonitor {
-  constructor(client, storage, logger = console, eventFilter = {}) {
+  constructor(client, storage, logger = console, eventFilter = {}, cycleTracker = null) {
     this.client = client;
     this.storage = storage;
     this.logger = logger;
@@ -15,6 +15,7 @@ export class DishwasherMonitor {
       types: eventFilter.types || ["STATUS", "EVENT", "NOTIFY"],
       keys: eventFilter.keys || [],
     };
+    this.cycleTracker = cycleTracker;
     this.controller = null;
     this.running = false;
     this.status = "Nepřipojeno";
@@ -139,31 +140,47 @@ export class DishwasherMonitor {
     } finally {
       cycleController.abort();
       parentSignal.removeEventListener("abort", abortCycle);
+      if (!parentSignal.aborted) {
+        await Promise.all(appliances.map(
+          (appliance) => this.cycleTracker?.recordDisconnect(appliance.haId),
+        ));
+      }
     }
   }
 
   async monitorAppliance(appliance, signal) {
-    const response = await this.client.openEventStream(appliance.haId, signal);
-    if (!response.body) {
-      throw new Error("Proud událostí Home Connect nevrátil tělo odpovědi");
-    }
-
-    await consumeSse(response.body, async (message) => {
-      this.updateDiagnostics(appliance.haId, message);
-      if (!shouldPersistEvent(message, this.eventFilter)) {
-        return;
+    try {
+      const response = await this.client.openEventStream(appliance.haId, signal);
+      if (!response.body) {
+        throw new Error("Proud událostí Home Connect nevrátil tělo odpovědi");
       }
-      await this.storage.saveEvent({
-        applianceId: appliance.haId,
-        applianceName: appliance.name || appliance.brand || "Myčka nádobí",
-        eventType: message.event,
-        eventId: message.id,
-        data: message.data,
-      });
-    }, signal);
+      await this.cycleTracker?.recordReconnect(appliance.haId);
 
-    if (!signal.aborted) {
-      throw new Error(`Proud událostí pro ${appliance.name || appliance.haId} skončil`);
+      await consumeSse(response.body, async (message) => {
+        const receivedAt = new Date().toISOString();
+        const persistedMessage = {
+          applianceId: appliance.haId,
+          applianceName: appliance.name || appliance.brand || "Myčka nádobí",
+          eventType: message.event,
+          eventId: message.id || "",
+          receivedAt,
+          data: message.data,
+        };
+        this.updateDiagnostics(appliance.haId, { ...message, receivedAt });
+        await this.cycleTracker?.processEvent(persistedMessage);
+        if (shouldPersistEvent(message, this.eventFilter)) {
+          await this.storage.saveEvent(persistedMessage);
+        }
+      }, signal);
+
+      if (!signal.aborted) {
+        throw new Error(`Proud událostí pro ${appliance.name || appliance.haId} skončil`);
+      }
+    } catch (error) {
+      if (!signal.aborted) {
+        await this.cycleTracker?.recordDisconnect(appliance.haId);
+      }
+      throw error;
     }
   }
 

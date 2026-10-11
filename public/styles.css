@@ -114,6 +114,8 @@ h3 { font-size: 1rem; margin-bottom: .2rem; }
 .program-card { grid-column: span 4; }
 .supplies-card { grid-column: span 3; }
 .recommendations-card { grid-column: 1 / -1; }
+.cycle-stats-card { grid-column: span 4; }
+.cycles-card { grid-column: span 8; }
 .events-card { grid-column: 1 / -1; margin-top: .15rem; }
 .card-heading {
   align-items: center;
@@ -199,6 +201,42 @@ dd { font-weight: 650; margin: 0; overflow-wrap: anywhere; text-align: right; }
 .recommendation.warning { background: var(--warning-soft); border-color: var(--warning); }
 .recommendation strong { display: block; font-size: .9rem; margin-bottom: .12rem; }
 .recommendation span { color: var(--muted); font-size: .84rem; }
+.cycle-stats {
+  display: grid;
+  gap: .7rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.cycle-stat {
+  background: #f5f9f8;
+  border-radius: .65rem;
+  padding: .7rem .75rem;
+}
+.cycle-stat span { color: var(--muted); display: block; font-size: .76rem; }
+.cycle-stat strong { display: block; font-size: 1.05rem; margin-top: .12rem; }
+.cycle-note { color: var(--muted); font-size: .78rem; margin: .8rem 0 0; }
+.cycle-list { display: grid; gap: .65rem; }
+.cycle {
+  align-items: center;
+  background: #f8fbfa;
+  border: 1px solid var(--line);
+  border-radius: .75rem;
+  display: grid;
+  gap: .8rem;
+  grid-template-columns: minmax(180px, 1fr) auto minmax(120px, auto);
+  padding: .8rem .9rem;
+}
+.cycle h3 { margin: 0; }
+.cycle-time { color: var(--muted); font-size: .78rem; margin: .18rem 0 0; }
+.cycle-status {
+  border-radius: 999px;
+  font-size: .72rem;
+  font-weight: 750;
+  padding: .2rem .55rem;
+}
+.cycle-status.finished { background: var(--primary-soft); color: var(--primary-dark); }
+.cycle-status.running { background: #e4efff; color: #225b9b; }
+.cycle-status.incomplete { background: var(--warning-soft); color: var(--warning); }
+.cycle-duration { font-size: .86rem; text-align: right; }
 .event-list { display: grid; gap: .65rem; }
 details {
   background: #f8fbfa;
@@ -235,14 +273,18 @@ pre {
 }
 
 @media (max-width: 950px) {
-  .diagnostics-card, .program-card, .supplies-card, .recommendations-card { grid-column: span 6; }
-  .recommendations-card { grid-column: 1 / -1; }
+  .diagnostics-card, .program-card, .supplies-card, .recommendations-card,
+  .cycle-stats-card, .cycles-card { grid-column: span 6; }
+  .recommendations-card, .cycles-card { grid-column: 1 / -1; }
 }
 
 @media (max-width: 640px) {
   .shell { padding: 1.2rem .8rem 3rem; }
-  .diagnostics-card, .program-card, .supplies-card, .recommendations-card { grid-column: 1 / -1; }
+  .diagnostics-card, .program-card, .supplies-card, .recommendations-card,
+  .cycle-stats-card, .cycles-card { grid-column: 1 / -1; }
   .card { padding: 1rem; }
+  .cycle { grid-template-columns: 1fr auto; }
+  .cycle-duration { grid-column: 1 / -1; text-align: left; }
   summary { grid-template-columns: 1fr auto; }
   summary time { grid-column: 1 / -1; }
 }

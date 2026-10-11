@@ -36,6 +36,31 @@ test("renders appliance metadata and current status diagnostics", () => {
       lastEventType: "STATUS",
       lastEventAt: "2026-10-09T20:00:00.000Z",
     }],
+    cycles: [{
+      cycleId: "cycle-1",
+      programKey: "Dishcare.Dishwasher.Program.Eco50",
+      status: "finished",
+      result: "finished",
+      startedAt: "2026-10-09T18:00:00.000Z",
+      finishedAt: "2026-10-09T21:00:00.000Z",
+      durationSeconds: 10_800,
+      startConfidence: "observed",
+      finishConfidence: "observed",
+    }],
+    cycleStats: {
+      week: {
+        completedCycleCount: 1,
+        incompleteCycleCount: 0,
+        averageDurationSeconds: 10_800,
+        mostUsedProgram: "Dishcare.Dishwasher.Program.Eco50",
+      },
+      month: {
+        completedCycleCount: 3,
+        incompleteCycleCount: 1,
+        averageDurationSeconds: 9_000,
+        mostUsedProgram: "Dishcare.Dishwasher.Program.Eco50",
+      },
+    },
   });
 
   assert.match(html, /Aktuální diagnostika/);
@@ -53,6 +78,12 @@ test("renders appliance metadata and current status diagnostics", () => {
   assert.match(html, /Sůl do myčky/);
   assert.match(html, /Tablety do myčky/);
   assert.match(html, /class="capsule-count ok">12</);
+  assert.match(html, /Statistiky mytí/);
+  assert.match(html, /Tento měsíc/);
+  assert.match(html, /Historie mytí/);
+  assert.match(html, /Dokončeno/);
+  assert.match(html, /3 h/);
+  assert.match(html, /1 neúplný záznam není zahrnut/);
 });
 
 test("recommends restocking low supplies", () => {
@@ -120,4 +151,27 @@ test("does not treat stale remaining time as an active wash", () => {
 
   assert.match(html, /Právě neprobíhá mytí/);
   assert.doesNotMatch(html, /Probíhá mytí/);
+});
+
+test("renders incomplete cycle boundaries without inventing timestamps", () => {
+  const html = renderDashboard({
+    events: [],
+    authorized: true,
+    monitorStatus: "Sledována 1 myčka",
+    capsuleCount: 12,
+    diagnostics: [],
+    cycles: [{
+      cycleId: "cycle-1",
+      programKey: null,
+      status: "finished",
+      result: "finished",
+      startedAt: null,
+      finishedAt: "2026-10-09T21:00:00.000Z",
+      durationSeconds: null,
+    }],
+  });
+
+  assert.match(html, /Začátek nebyl zachycen/);
+  assert.match(html, /Dokončeno, neúplná data/);
+  assert.match(html, /Nelze spolehlivě určit/);
 });

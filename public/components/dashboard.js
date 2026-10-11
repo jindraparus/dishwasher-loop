@@ -1,5 +1,6 @@
 import { escapeHtml } from "../lib/format.js";
 import { renderDiagnosticsCard } from "./diagnostics.js";
+import { renderCyclesCard, renderCycleStatsCard } from "./cycles.js";
 import { renderEventsCard } from "./events.js";
 import { renderHeader } from "./header.js";
 import { renderProgramCard } from "./program.js";
@@ -18,6 +19,8 @@ export function renderDashboard(state, { error = "", now = Date.now() } = {}) {
       ${renderProgramCard(diagnostics, now)}
       ${renderSuppliesCard(diagnostics, state.capsuleCount)}
       ${renderRecommendationsCard(state, now)}
+      ${renderCycleStatsCard(state.cycleStats)}
+      ${renderCyclesCard(state.cycles)}
       ${renderEventsCard(events)}
     </main>
   </div>`;

@@ -89,6 +89,7 @@ The UI includes:
 - read-only washing-capsule inventory from shared storage;
 - recommendations derived from connectivity, operation state, warnings, and
   capsule inventory;
+- observed washing-cycle history plus weekly and monthly statistics;
 - the latest received event type and timestamp; and
 - raw payloads for persisted event history.
 
@@ -106,8 +107,9 @@ The service is an Express application running on Node.js 22. It owns:
 - the long-lived event streams;
 - SSE parsing and client-side filtering;
 - event persistence;
+- resilient washing-cycle derivation and backfill;
 - current diagnostics held in memory;
-- authenticated dashboard and supply JSON APIs;
+- authenticated dashboard, cycle-history, and cycle-statistics JSON APIs;
 - static SPA asset delivery; and
 - a data-free `/healthz` readiness endpoint.
 
@@ -150,21 +152,36 @@ Azure deployments use one Azure Table Storage table named `DishwasherLoop`.
 Local development uses `.data/dishwasher-loop.json` through the same storage
 interface.
 
-Azure Table Storage uses two partitions:
+Azure Table Storage uses three partitions:
 
 | Partition key | Row key | Contents |
 |---|---|---|
 | `settings` | `oauth` | Home Connect access token, refresh token, and expiry |
 | `settings` | `supplies` | Optional read-only washing-capsule count |
 | `events` | timestamp plus UUID | Appliance identity, event metadata, receipt time, and JSON payload |
+| `cycles` | deterministic cycle ID | Program, observed boundaries, result, confidence, evidence, gaps, and derived duration |
 
-Tokens and events survive App Service restarts. Azure Storage encrypts the
+Tokens, events, and cycles survive App Service restarts. Azure Storage encrypts the
 storage account at rest. The application reaches the account through a storage
 connection string in App Service settings.
 
 The UI reads the latest 200 events. Diagnostics replay these events oldest to
 newest during monitor initialization so warning state, including salt and rinse
 aid, can be restored after a process restart.
+
+Cycle history replays all persisted events chronologically during startup
+through the same state machine used for live events. Deterministic cycle IDs and
+upserts make this backfill idempotent. Existing source events are never changed.
+
+Cycle timestamps distinguish exact observed boundaries from partial knowledge:
+
+- `startedAt` and `finishedAt` remain null when the corresponding boundary was
+  not observed reliably;
+- `firstObservedAt` and `lastObservedAt` describe the observation window but are
+  not substituted as exact boundaries;
+- duration is calculated only when both trusted boundaries exist;
+- confidence/evidence fields explain why each boundary was accepted; and
+- disconnect intervals are retained as observation gaps.
 
 ## 4. Authentication and authorization
 
@@ -303,8 +320,10 @@ For each paired dishwasher:
 2. It opens `/events` with `Accept: text/event-stream`.
 3. Each parsed event updates in-memory diagnostics.
 4. Consumable event keys update derived salt/rinse-aid state.
-5. The client-side filter decides whether to persist the message.
-6. Persisted messages become available in the event-history UI.
+5. The complete message is processed atomically by the per-appliance cycle
+   state machine.
+6. The client-side filter decides whether to persist the raw message.
+7. Persisted messages become available in the event-history UI.
 
 Home Connect does not support server-side subscriptions to selected event types
 or item keys. The complete stream is always received. Persistence defaults to:
@@ -315,7 +334,7 @@ STATUS, EVENT, NOTIFY
 
 `KEEP-ALIVE` is not persisted. `HOME_CONNECT_EVENT_TYPES` and
 `HOME_CONNECT_EVENT_KEYS` can narrow persistence further. Filtering does not
-stop live status messages from updating diagnostics.
+stop live status messages from updating diagnostics or cycle history.
 
 The consumable event keys are:
 
@@ -333,7 +352,46 @@ Their event-present state is rendered as:
 | `confirmed` | Refill soon, warning acknowledged |
 | absent or unrecognized | Unknown |
 
-### 5.4 Disconnects and retries
+### 5.4 Washing-cycle derivation
+
+The cycle tracker ranks signals instead of assuming that every event arrives.
+
+Strong starts are an active `ProgramStarted`, a fresh nonempty
+`ActiveProgram`, or a transition into `OperationState.Run`. Progress and
+remaining-time updates prove only that a cycle is being observed; when they are
+the first evidence, `startedAt` remains null until a strong boundary arrives.
+`SelectedProgram` alone never starts a cycle.
+
+Strong completion signals are `ProgramFinished.Present` and
+`OperationState.Finished`. `ProgramFinished.Off` only clears the appliance
+notification and never counts a cycle. Two independent weak terminal signals
+within five minutes can close a cycle with inferred confidence, for example
+`ActiveProgram: null` plus `Run -> Ready`. A lone null active program, progress
+100, power-off, disconnect, or silence cannot prove successful completion.
+
+After a completion, weak selected-program/progress/remaining reset telemetry is
+suppressed for the same five-minute correlation window. A genuinely new strong
+start still opens a new cycle. This prevents the appliance's post-finish reset
+sequence from becoming a phantom wash.
+
+If a new program starts while another cycle is unresolved, the old record is
+closed as incomplete/superseded without an invented finish timestamp. A finish
+with no known start creates one finished record with a missing start boundary
+and no derived duration. Duplicate or replayed transitions enrich the same
+deterministic record rather than incrementing the cycle count.
+
+The authenticated APIs are:
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /api/cycles?limit=50` | Bounded recent cycle history, maximum 100 |
+| `GET /api/cycles/stats?period=week` | Weekly statistics |
+| `GET /api/cycles/stats?period=month` | Monthly statistics |
+
+Statistics use `CYCLE_TIMEZONE` (`Europe/Prague` by default). Completed and
+incomplete counts remain separate, and averages include only known durations.
+
+### 5.5 Disconnects and retries
 
 An ended stream is treated as an error. The monitor:
 
@@ -343,6 +401,10 @@ An ended stream is treated as an error. The monitor:
 - reloads status and persisted diagnostics;
 - reconnects all streams; and
 - applies exponential retry delay from one second up to 60 seconds.
+
+An open cycle remains unresolved across a disconnect. The tracker records the
+observation gap and resumes the same record after reconnection. Disconnect,
+restart, and timeout timestamps are never used as fabricated cycle boundaries.
 
 Authentication-required errors stop the monitor until the user reconnects Home
 Connect.
@@ -386,7 +448,7 @@ The Bicep deployment outputs:
 | Microsoft Entra interactive app registration | Entra | Authenticates the browser through Easy Auth |
 | Microsoft Entra interactive service principal | Entra | Tenant-local representation of the interactive app |
 | Entra user/guest objects | Entra | Immutable principal IDs authorized by Node |
-| Azure Table `DishwasherLoop` | Application startup | Stores OAuth settings and event entities |
+| Azure Table `DishwasherLoop` | Application startup | Stores OAuth settings, event entities, and derived cycle records |
 | GitHub deployment app registration | Azure CLI setup | Trust anchor for GitHub OIDC |
 | GitHub deployment service principal | Azure CLI setup | Receives Website Contributor role |
 | Federated credential `github-main` | Azure CLI setup | Trusts only this repository's immutable `main`-branch OIDC subject |
@@ -402,6 +464,7 @@ The Bicep deployment outputs:
 | `COOKIE_SECRET` | HMAC key for OAuth state cookie | Yes |
 | `AZURE_STORAGE_CONNECTION_STRING` | Table Storage access | Yes |
 | `AZURE_TABLE_NAME` | Table name | No |
+| `CYCLE_TIMEZONE` | IANA timezone for weekly/monthly cycle statistics | No |
 | `MICROSOFT_PROVIDER_AUTHENTICATION_SECRET` | Easy Auth Entra client secret | Yes |
 | `REQUIRE_MICROSOFT_AUTH` | Enables Node's identity-header validation | No |
 | `APP_ALLOWED_PRINCIPAL_IDS` | Comma-separated immutable Entra object IDs | No |

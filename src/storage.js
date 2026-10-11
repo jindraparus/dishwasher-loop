@@ -7,6 +7,7 @@ const SETTINGS_PARTITION = "settings";
 const TOKENS_ROW = "oauth";
 const SUPPLIES_ROW = "supplies";
 const EVENTS_PARTITION = "events";
+const CYCLES_PARTITION = "cycles";
 
 export class Storage {
   constructor(connectionString, tableName, localFile = ".data/dishwasher-loop.json") {
@@ -24,6 +25,7 @@ export class Storage {
       try {
         this.localData = JSON.parse(await readFile(this.localFile, "utf8"));
         this.localData.events ||= [];
+        this.localData.cycles ||= [];
         this.localData.tokens ??= null;
       } catch (error) {
         if (error.code !== "ENOENT") {
@@ -31,7 +33,7 @@ export class Storage {
             cause: error,
           });
         }
-        this.localData = { tokens: null, events: [] };
+        this.localData = { tokens: null, events: [], cycles: [] };
         await this.persistLocal();
       }
       return;
@@ -103,8 +105,14 @@ export class Storage {
     }
   }
 
-  async saveEvent({ applianceId, applianceName, eventType, eventId, data }) {
-    const receivedAt = new Date().toISOString();
+  async saveEvent({
+    applianceId,
+    applianceName,
+    eventType,
+    eventId,
+    data,
+    receivedAt = new Date().toISOString(),
+  }) {
     if (this.localFile) {
       this.localData.events.push({
         applianceId,
@@ -115,7 +123,7 @@ export class Storage {
         data,
       });
       await this.persistLocal();
-      return;
+      return receivedAt;
     }
     await this.client.createEntity({
       partitionKey: EVENTS_PARTITION,
@@ -127,13 +135,19 @@ export class Storage {
       receivedAt,
       payload: JSON.stringify(data),
     });
+    return receivedAt;
   }
 
   async listEvents(limit = 200) {
+    return (await this.listAllEvents())
+      .toSorted((left, right) => right.receivedAt.localeCompare(left.receivedAt))
+      .slice(0, limit);
+  }
+
+  async listAllEvents() {
     if (this.localFile) {
       return this.localData.events
-        .toSorted((left, right) => right.receivedAt.localeCompare(left.receivedAt))
-        .slice(0, limit);
+        .toSorted(compareEvents);
     }
     const entities = [];
     const query = this.client.listEntities({
@@ -142,6 +156,7 @@ export class Storage {
 
     for await (const entity of query) {
       entities.push({
+        storageId: entity.rowKey,
         applianceId: entity.applianceId,
         applianceName: entity.applianceName,
         eventType: entity.eventType,
@@ -151,9 +166,44 @@ export class Storage {
       });
     }
 
-    return entities
-      .sort((left, right) => right.receivedAt.localeCompare(left.receivedAt))
-      .slice(0, limit);
+    return entities.sort(compareEvents);
+  }
+
+  async saveCycle(cycle) {
+    const stored = structuredClone(cycle);
+    if (this.localFile) {
+      const index = this.localData.cycles.findIndex(
+        (item) => item.cycleId === stored.cycleId,
+      );
+      if (index === -1) {
+        this.localData.cycles.push(stored);
+      } else {
+        this.localData.cycles[index] = stored;
+      }
+      await this.persistLocal();
+      return;
+    }
+    await this.client.upsertEntity(cycleToEntity(stored), "Replace");
+  }
+
+  async listCycles(limit = 50) {
+    return (await this.listAllCycles()).slice(0, limit);
+  }
+
+  async listAllCycles() {
+    if (this.localFile) {
+      return this.localData.cycles
+        .map((cycle) => structuredClone(cycle))
+        .sort(compareCycles);
+    }
+    const cycles = [];
+    const query = this.client.listEntities({
+      queryOptions: { filter: `PartitionKey eq '${CYCLES_PARTITION}'` },
+    });
+    for await (const entity of query) {
+      cycles.push(entityToCycle(entity));
+    }
+    return cycles.sort(compareCycles);
   }
 
   persistLocal() {
@@ -184,4 +234,76 @@ function isLocalConnection(connectionString) {
 
 function validCapsuleCount(value) {
   return Number.isInteger(value) && value >= 0 && value <= 999 ? value : null;
+}
+
+function compareEvents(left, right) {
+  return left.receivedAt.localeCompare(right.receivedAt)
+    || String(left.storageId || left.eventId || "")
+      .localeCompare(String(right.storageId || right.eventId || ""));
+}
+
+function compareCycles(left, right) {
+  return String(right.firstObservedAt).localeCompare(String(left.firstObservedAt));
+}
+
+export function cycleToEntity(cycle) {
+  return {
+    partitionKey: CYCLES_PARTITION,
+    rowKey: cycle.cycleId,
+    applianceId: cycle.applianceId,
+    applianceName: cycle.applianceName,
+    programKey: cycle.programKey || "",
+    status: cycle.status,
+    result: cycle.result,
+    startedAt: cycle.startedAt || "",
+    finishedAt: cycle.finishedAt || "",
+    durationSeconds: Number.isFinite(cycle.durationSeconds)
+      ? cycle.durationSeconds
+      : -1,
+    firstObservedAt: cycle.firstObservedAt,
+    lastObservedAt: cycle.lastObservedAt,
+    startConfidence: cycle.startConfidence,
+    finishConfidence: cycle.finishConfidence,
+    details: JSON.stringify({
+      startEvidence: cycle.startEvidence,
+      finishEvidence: cycle.finishEvidence,
+      observationGaps: cycle.observationGaps,
+      sourceEventIds: cycle.sourceEventIds,
+      progressMin: cycle.progressMin,
+      progressMax: cycle.progressMax,
+      remainingInitialSeconds: cycle.remainingInitialSeconds,
+      remainingLastSeconds: cycle.remainingLastSeconds,
+      pendingTerminalSignals: cycle.pendingTerminalSignals,
+    }),
+  };
+}
+
+export function entityToCycle(entity) {
+  const details = parsePayload(entity.details) || {};
+  return {
+    cycleId: entity.rowKey,
+    applianceId: entity.applianceId,
+    applianceName: entity.applianceName,
+    programKey: entity.programKey || null,
+    status: entity.status,
+    result: entity.result,
+    startedAt: entity.startedAt || null,
+    finishedAt: entity.finishedAt || null,
+    durationSeconds: Number(entity.durationSeconds) >= 0
+      ? Number(entity.durationSeconds)
+      : null,
+    firstObservedAt: entity.firstObservedAt,
+    lastObservedAt: entity.lastObservedAt,
+    startConfidence: entity.startConfidence,
+    finishConfidence: entity.finishConfidence,
+    startEvidence: details.startEvidence || [],
+    finishEvidence: details.finishEvidence || [],
+    observationGaps: details.observationGaps || [],
+    sourceEventIds: details.sourceEventIds || [],
+    progressMin: details.progressMin ?? null,
+    progressMax: details.progressMax ?? null,
+    remainingInitialSeconds: details.remainingInitialSeconds ?? null,
+    remainingLastSeconds: details.remainingLastSeconds ?? null,
+    pendingTerminalSignals: details.pendingTerminalSignals || [],
+  };
 }

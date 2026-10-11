@@ -26,6 +26,12 @@ export function loadConfig(env = process.env) {
       "APP_ALLOWED_PRINCIPAL_IDS or APP_ALLOWED_EMAIL is required when REQUIRE_MICROSOFT_AUTH=true",
     );
   }
+  const cycleTimezone = env.CYCLE_TIMEZONE || "Europe/Prague";
+  try {
+    new Intl.DateTimeFormat("en", { timeZone: cycleTimezone }).format();
+  } catch (error) {
+    throw new Error(`Invalid CYCLE_TIMEZONE: ${cycleTimezone}`, { cause: error });
+  }
 
   return {
     clientId: env.HOME_CONNECT_CLIENT_ID,
@@ -44,6 +50,7 @@ export function loadConfig(env = process.env) {
       (value) => value.toUpperCase(),
     ),
     persistedEventKeys: parseList(env.HOME_CONNECT_EVENT_KEYS || ""),
+    cycleTimezone,
   };
 }
 

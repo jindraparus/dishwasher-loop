@@ -193,3 +193,45 @@ test("clears stale program timing when the active program ends", async () => {
     remainingUpdatedAt: "2026-10-10T20:30:00.000Z",
   });
 });
+
+test("sends every live event to cycle tracking even when history filtering excludes it", async () => {
+  const tracked = [];
+  const saved = [];
+  const disconnected = [];
+  const monitor = new DishwasherMonitor({
+    openEventStream: async () => new Response(
+      'event: NOTIFY\ndata: {"items":[{"key":"BSH.Common.Root.ActiveProgram","value":"Dishcare.Dishwasher.Program.Eco50"}]}\n\n',
+    ),
+  }, {
+    async saveEvent(event) {
+      saved.push(event);
+    },
+  }, {
+    error() {},
+  }, {
+    types: ["EVENT"],
+    keys: ["BSH.Common.Event.ProgramFinished"],
+  }, {
+    async processEvent(event) {
+      tracked.push(event);
+    },
+    async recordReconnect() {},
+    async recordDisconnect(applianceId) {
+      disconnected.push(applianceId);
+    },
+  });
+
+  await assert.rejects(
+    monitor.monitorAppliance({
+      haId: "dishwasher-1",
+      name: "Kitchen dishwasher",
+    }, new AbortController().signal),
+    /Proud událostí.*skončil/,
+  );
+
+  assert.equal(tracked.length, 1);
+  assert.equal(tracked[0].eventType, "NOTIFY");
+  assert.match(tracked[0].receivedAt, /^\d{4}-\d{2}-\d{2}T/);
+  assert.deepEqual(saved, []);
+  assert.deepEqual(disconnected, ["dishwasher-1"]);
+});

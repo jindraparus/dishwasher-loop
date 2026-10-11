@@ -3,6 +3,11 @@ import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import express from "express";
 import { loadConfig } from "./config.js";
+import {
+  buildCycleStats,
+  CycleTracker,
+  parseCycleLimit,
+} from "./cycles.js";
 import { HomeConnectClient } from "./home-connect.js";
 import { requireAllowedMicrosoftUser } from "./microsoft-auth.js";
 import { DishwasherMonitor } from "./monitor.js";
@@ -13,12 +18,14 @@ const indexPath = fileURLToPath(new URL("../public/index.html", import.meta.url)
 const publicPath = fileURLToPath(new URL("../public", import.meta.url));
 const storage = new Storage(config.storageConnectionString, config.tableName);
 await storage.initialize();
+const cycleTracker = new CycleTracker(storage, console);
+await cycleTracker.initialize();
 
 const homeConnect = new HomeConnectClient(config, storage);
 const monitor = new DishwasherMonitor(homeConnect, storage, console, {
   types: config.persistedEventTypes,
   keys: config.persistedEventKeys,
-});
+}, cycleTracker);
 if (await storage.getTokens()) {
   monitor.start();
 }
@@ -35,10 +42,11 @@ app.use(requireAllowedMicrosoftUser(config));
 
 app.get("/api/dashboard", async (request, response, next) => {
   try {
-    const [events, tokens, capsuleCount] = await Promise.all([
+    const [events, tokens, capsuleCount, allCycles] = await Promise.all([
       storage.listEvents(),
       storage.getTokens(),
       storage.getCapsuleCount(),
+      storage.listAllCycles(),
     ]);
     response.json({
       events,
@@ -46,7 +54,42 @@ app.get("/api/dashboard", async (request, response, next) => {
       monitorStatus: monitor.getStatus(),
       diagnostics: monitor.getDiagnostics(),
       capsuleCount,
+      cycles: allCycles.slice(0, 20),
+      cycleStats: {
+        week: buildCycleStats(allCycles, "week", config.cycleTimezone),
+        month: buildCycleStats(allCycles, "month", config.cycleTimezone),
+      },
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/cycles", async (request, response, next) => {
+  try {
+    const limit = parseCycleLimit(request.query.limit);
+    response.json({ cycles: await storage.listCycles(limit), limit });
+  } catch (error) {
+    if (error.message.startsWith("Limit must")) {
+      response.status(400).json({ error: error.message });
+      return;
+    }
+    next(error);
+  }
+});
+
+app.get("/api/cycles/stats", async (request, response, next) => {
+  try {
+    const period = request.query.period || "week";
+    if (!["week", "month"].includes(period)) {
+      response.status(400).json({ error: "Period must be week or month." });
+      return;
+    }
+    response.json(buildCycleStats(
+      await storage.listAllCycles(),
+      period,
+      config.cycleTimezone,
+    ));
   } catch (error) {
     next(error);
   }
