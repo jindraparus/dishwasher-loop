@@ -24,6 +24,9 @@ param cookieSecret string
 @description('Client ID of the Microsoft Entra app registration used by App Service Authentication.')
 param microsoftAuthClientId string
 
+@description('Application ID URI exposed by the Microsoft Entra API app registration.')
+param microsoftApiAudience string = 'api://${microsoftAuthClientId}'
+
 @secure()
 @description('Client secret value of the Microsoft Entra app registration.')
 param microsoftAuthClientSecret string
@@ -160,6 +163,11 @@ resource auth 'Microsoft.Web/sites/config@2023-12-01' = {
           clientId: microsoftAuthClientId
           clientSecretSettingName: 'MICROSOFT_PROVIDER_AUTHENTICATION_SECRET'
           openIdIssuer: '${environment().authentication.loginEndpoint}${microsoftTenantId}/v2.0'
+        }
+        validation: {
+          allowedAudiences: [
+            microsoftApiAudience
+          ]
         }
         login: {
           loginParameters: [

@@ -5,46 +5,86 @@ import {
   isProgramActive,
 } from "../../public/lib/program.js";
 
-const DEFAULT_BASE_URL = "http://localhost:3000";
-const DEFAULT_TIMEOUT_MS = 5_000;
+const LOCAL_TIMEOUT_MS = 5_000;
+const AZURE_TIMEOUT_MS = 30_000;
 
 export class DashboardClient {
   constructor({
-    baseUrl = process.env.DISHWASHER_LOOP_BASE_URL || DEFAULT_BASE_URL,
+    target,
+    baseUrl,
+    tokenProvider,
     fetchImplementation = globalThis.fetch,
-    timeoutMs = DEFAULT_TIMEOUT_MS,
+    timeoutMs,
   } = {}) {
-    this.dashboardUrl = new URL("/api/dashboard", normalizeBaseUrl(baseUrl));
+    if (!["local", "azure"].includes(target)) {
+      throw new Error("Dashboard target must be local or azure.");
+    }
+    this.source = target;
+    this.dashboardUrl = new URL("/api/dashboard", normalizeBaseUrl(baseUrl, target));
+    if (target === "azure" && !tokenProvider) {
+      throw new Error("Azure dashboard access requires a token provider.");
+    }
+    this.tokenProvider = tokenProvider;
     this.fetchImplementation = fetchImplementation;
-    this.timeoutMs = timeoutMs;
+    this.timeoutMs = timeoutMs ?? (target === "azure" ? AZURE_TIMEOUT_MS : LOCAL_TIMEOUT_MS);
   }
 
   async getDashboard() {
+    const headers = { Accept: "application/json" };
+    if (this.source === "azure") {
+      headers.Authorization = `Bearer ${await this.tokenProvider.getAccessToken()}`;
+    }
+
     let response;
     try {
       response = await this.fetchImplementation(this.dashboardUrl, {
-        headers: { Accept: "application/json" },
+        headers,
+        redirect: "manual",
         signal: AbortSignal.timeout(this.timeoutMs),
       });
     } catch (error) {
       throw new Error(
         `Unable to reach Dishwasher Loop at ${this.dashboardUrl.origin}. `
-        + "Start the local service with npm start and try again.",
+        + (this.source === "local"
+          ? "Start the local service with npm start and try again."
+          : "Check the Azure base URL, network connection, and App Service status."),
         { cause: error },
       );
     }
 
     const contentType = response.headers.get("content-type") || "";
+    if (response.status >= 300 && response.status < 400) {
+      throw new Error(
+        `${capitalize(this.source)} Dishwasher Loop returned a redirect instead of API data. `
+        + (this.source === "azure"
+          ? "Verify that the bearer-token audience and delegated scope match App Service Easy Auth."
+          : "Confirm that the configured URL points to the local Dishwasher Loop API."),
+      );
+    }
+    if (this.source === "azure" && response.status === 401) {
+      throw new Error(
+        "Azure rejected the Microsoft access token. Sign in again and verify the "
+        + "tenant, audience, delegated scope, and Easy Auth configuration.",
+      );
+    }
+    if (this.source === "azure" && response.status === 403) {
+      throw new Error(
+        "The signed-in Microsoft account is not allowed to access Dishwasher Loop. "
+        + "Add its tenant-local object ID to the Azure allowlist or use an allowed account.",
+      );
+    }
     if (!response.ok) {
       throw new Error(
         `Dishwasher Loop returned HTTP ${response.status}. `
-        + "Check the local service logs and authentication state.",
+        + `Check the ${this.source} service logs and authentication state.`,
       );
     }
     if (!contentType.includes("application/json")) {
       throw new Error(
         "Dishwasher Loop returned a non-JSON response. "
-        + "Confirm that the configured URL points to the local Dishwasher Loop service.",
+        + (this.source === "local"
+          ? "Confirm that the configured URL points to the local Dishwasher Loop service."
+          : "Confirm the Azure URL, bearer-token audience, delegated scope, and Easy Auth settings."),
       );
     }
 
@@ -57,7 +97,7 @@ export class DashboardClient {
     validateDashboard(dashboard);
     if (!dashboard.authorized) {
       throw new Error(
-        "Home Connect is not authorized. Open the local Dishwasher Loop dashboard "
+        `Home Connect is not authorized. Open the ${this.source} Dishwasher Loop dashboard `
         + "and complete the Home Connect connection first.",
       );
     }
@@ -142,17 +182,27 @@ export function buildDishwasherEvents(dashboard, limit) {
   }));
 }
 
-function normalizeBaseUrl(value) {
+function normalizeBaseUrl(value, target) {
   let url;
   try {
     url = new URL(value);
   } catch (error) {
-    throw new Error(`Invalid DISHWASHER_LOOP_BASE_URL: ${value}`, { cause: error });
+    const setting = target === "azure"
+      ? "DISHWASHER_LOOP_AZURE_BASE_URL"
+      : "DISHWASHER_LOOP_BASE_URL";
+    throw new Error(`Invalid ${setting}: ${value}`, { cause: error });
   }
   if (!["http:", "https:"].includes(url.protocol)) {
-    throw new Error("DISHWASHER_LOOP_BASE_URL must use http or https.");
+    throw new Error("Dishwasher Loop base URL must use http or https.");
+  }
+  if (target === "azure" && url.protocol !== "https:") {
+    throw new Error("Azure Dishwasher Loop base URL must use https.");
   }
   return url;
+}
+
+function capitalize(value) {
+  return `${value[0].toUpperCase()}${value.slice(1)}`;
 }
 
 function validateDashboard(value) {
