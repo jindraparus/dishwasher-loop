@@ -7,7 +7,11 @@
         "${workspaceFolder}/scripts/start-mcp.sh"
       ],
       "env": {
-        "DISHWASHER_LOOP_BASE_URL": "http://localhost:3000",
+        "DISHWASHER_LOOP_TARGET": "azure",
+        "DISHWASHER_LOOP_AZURE_BASE_URL": "https://jparusdishwasher.azurewebsites.net",
+        "DISHWASHER_LOOP_ENTRA_TENANT_ID": "1b85cd26-5288-4462-8c8e-086f99a0dc9b",
+        "DISHWASHER_LOOP_ENTRA_CLIENT_ID": "f05245f8-4df7-4671-985b-bb019dfc9c51",
+        "DISHWASHER_LOOP_ENTRA_SCOPE": "api://60bdaf88-7091-49ef-ab79-e76a314b90e2/Dishwasher.Read",
         "DISHWASHER_DOCUMENTS_DIR": "${workspaceFolder}/docs/dishwasher"
       }
     }

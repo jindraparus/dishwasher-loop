@@ -64,9 +64,26 @@ test("does not report missing connectivity as connected", () => {
   assert.equal(overview.appliances[0].connected, null);
 });
 
+test("uses target-specific dashboard timeouts", () => {
+  const localClient = new DashboardClient({
+    target: "local",
+    baseUrl: "http://localhost:3000",
+  });
+  const azureClient = new DashboardClient({
+    target: "azure",
+    baseUrl: "https://dishwasher.example",
+    tokenProvider: { async getAccessToken() {} },
+  });
+
+  assert.equal(localClient.timeoutMs, 5_000);
+  assert.equal(azureClient.timeoutMs, 30_000);
+});
+
 test("dashboard client reports unavailable, malformed, and unauthorized services", async (t) => {
   await t.test("unavailable local service", async () => {
     const client = new DashboardClient({
+      target: "local",
+      baseUrl: "http://localhost:3000",
       fetchImplementation: async () => {
         throw new Error("connection refused");
       },
@@ -76,6 +93,8 @@ test("dashboard client reports unavailable, malformed, and unauthorized services
 
   await t.test("non-JSON response", async () => {
     const client = new DashboardClient({
+      target: "local",
+      baseUrl: "http://localhost:3000",
       fetchImplementation: async () => new Response("<html>wrong service</html>", {
         status: 200,
         headers: { "content-type": "text/html" },
@@ -86,6 +105,8 @@ test("dashboard client reports unavailable, malformed, and unauthorized services
 
   await t.test("incomplete payload", async () => {
     const client = new DashboardClient({
+      target: "local",
+      baseUrl: "http://localhost:3000",
       fetchImplementation: async () => Response.json({ authorized: true }),
     });
     await assert.rejects(client.getDashboard(), /incomplete dashboard payload/);
@@ -95,6 +116,8 @@ test("dashboard client reports unavailable, malformed, and unauthorized services
     const dashboard = dashboardFixture();
     dashboard.diagnostics[0].statusItems = null;
     const client = new DashboardClient({
+      target: "local",
+      baseUrl: "http://localhost:3000",
       fetchImplementation: async () => Response.json(dashboard),
     });
     await assert.rejects(client.getDashboard(), /invalid appliance diagnostics/);
@@ -102,6 +125,8 @@ test("dashboard client reports unavailable, malformed, and unauthorized services
 
   await t.test("Home Connect authorization required", async () => {
     const client = new DashboardClient({
+      target: "local",
+      baseUrl: "http://localhost:3000",
       fetchImplementation: async () => Response.json({
         ...dashboardFixture(),
         authorized: false,
@@ -111,8 +136,62 @@ test("dashboard client reports unavailable, malformed, and unauthorized services
   });
 });
 
+test("Azure dashboard access uses a bearer token without falling back", async (t) => {
+  await t.test("sends the delegated token and returns dashboard data", async () => {
+    const requests = [];
+    const client = new DashboardClient({
+      target: "azure",
+      baseUrl: "https://dishwasher.example",
+      tokenProvider: {
+        async getAccessToken() {
+          return "secret-access-token";
+        },
+      },
+      fetchImplementation: async (url, options) => {
+        requests.push({ url, options });
+        return Response.json(dashboardFixture());
+      },
+    });
+
+    assert.deepEqual(await client.getDashboard(), dashboardFixture());
+    assert.equal(requests.length, 1);
+    assert.equal(requests[0].url.href, "https://dishwasher.example/api/dashboard");
+    assert.equal(requests[0].options.headers.Authorization, "Bearer secret-access-token");
+    assert.equal(requests[0].options.redirect, "manual");
+  });
+
+  await t.test("reports allowlist rejection", async () => {
+    const client = azureClient(async () => new Response("forbidden", { status: 403 }));
+    await assert.rejects(client.getDashboard(), /not allowed.*Azure allowlist/i);
+  });
+
+  await t.test("reports expired or invalid authentication", async () => {
+    const client = azureClient(async () => new Response("unauthorized", { status: 401 }));
+    await assert.rejects(client.getDashboard(), /rejected the Microsoft access token/);
+  });
+
+  await t.test("reports authentication redirects", async () => {
+    const client = azureClient(async () => new Response(null, {
+      status: 302,
+      headers: { location: "https://login.microsoftonline.com/" },
+    }));
+    await assert.rejects(client.getDashboard(), /redirect instead of API data/);
+  });
+
+  await t.test("does not retry Azure failures against local", async () => {
+    let calls = 0;
+    const client = azureClient(async () => {
+      calls += 1;
+      throw new Error("network unavailable");
+    });
+    await assert.rejects(client.getDashboard(), /Azure base URL/);
+    assert.equal(calls, 1);
+  });
+});
+
 test("MCP server exposes bounded read-only tools and actionable errors", async () => {
   const dashboardClient = {
+    source: "local",
     async getDashboard() {
       throw new Error("Local dashboard is unavailable for the test.");
     },
@@ -160,6 +239,67 @@ test("MCP server exposes bounded read-only tools and actionable errors", async (
     await server.close();
   }
 });
+
+test("MCP handshake completes before Azure authentication and reports source metadata", async () => {
+  let dashboardCalls = 0;
+  const dashboardClient = {
+    source: "azure",
+    async getDashboard() {
+      dashboardCalls += 1;
+      return dashboardFixture();
+    },
+  };
+  const server = createDishwasherMcpServer({
+    dashboardClient,
+    documents: {
+      async search() {
+        return [];
+      },
+      async read() {
+        return {};
+      },
+    },
+  });
+  const client = new Client({ name: "dishwasher-test", version: "1.0.0" });
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+
+  try {
+    await Promise.all([
+      server.connect(serverTransport),
+      client.connect(clientTransport),
+    ]);
+    assert.equal(dashboardCalls, 0);
+
+    const overview = await client.callTool({
+      name: "get_dishwasher_overview",
+      arguments: {},
+    });
+    assert.equal(overview.structuredContent.source, "azure");
+    assert.equal(dashboardCalls, 1);
+
+    const events = await client.callTool({
+      name: "list_dishwasher_events",
+      arguments: { limit: 1 },
+    });
+    assert.equal(events.structuredContent.source, "azure");
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
+function azureClient(fetchImplementation) {
+  return new DashboardClient({
+    target: "azure",
+    baseUrl: "https://dishwasher.example",
+    tokenProvider: {
+      async getAccessToken() {
+        return "secret-access-token";
+      },
+    },
+    fetchImplementation,
+  });
+}
 
 function dashboardFixture() {
   return {

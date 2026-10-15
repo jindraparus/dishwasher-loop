@@ -8,14 +8,19 @@ import {
   buildDishwasherOverview,
   DashboardClient,
 } from "./dashboard.js";
+import { AzureTokenProvider } from "./azure-auth.js";
+import { loadMcpConfig } from "./config.js";
 import { DishwasherDocuments } from "./documents.js";
 
 const MAX_EVENT_LIMIT = 50;
 
 export function createDishwasherMcpServer({
-  dashboardClient = new DashboardClient(),
+  dashboardClient,
   documents = new DishwasherDocuments(),
 } = {}) {
+  if (!dashboardClient) {
+    throw new Error("A configured dashboard client is required.");
+  }
   const server = new McpServer({
     name: "dishwasher-loop",
     version: "0.1.0",
@@ -23,7 +28,7 @@ export function createDishwasherMcpServer({
 
   server.registerTool("get_dishwasher_overview", {
     title: "Get dishwasher overview",
-    description: "Get current local dishwasher status, program, supplies, and recommendations.",
+    description: "Get current dishwasher status, program, supplies, and recommendations.",
     annotations: {
       readOnlyHint: true,
       destructiveHint: false,
@@ -31,12 +36,15 @@ export function createDishwasherMcpServer({
     },
   }, () => handleTool(async () => {
     const dashboard = await dashboardClient.getDashboard();
-    return buildDishwasherOverview(dashboard);
+    return {
+      source: dashboardClient.source,
+      ...buildDishwasherOverview(dashboard),
+    };
   }));
 
   server.registerTool("list_dishwasher_events", {
     title: "List dishwasher events",
-    description: "List recent events from the local Dishwasher Loop service.",
+    description: "List recent events from the selected Dishwasher Loop service.",
     inputSchema: {
       limit: z.number().int().min(1).max(MAX_EVENT_LIMIT).default(20)
         .describe(`Maximum number of events to return, up to ${MAX_EVENT_LIMIT}.`),
@@ -49,6 +57,7 @@ export function createDishwasherMcpServer({
   }, ({ limit }) => handleTool(async () => {
     const dashboard = await dashboardClient.getDashboard();
     return {
+      source: dashboardClient.source,
       events: buildDishwasherEvents(dashboard, limit),
       limit,
     };
@@ -112,7 +121,16 @@ async function handleTool(operation) {
 }
 
 async function main() {
-  const server = createDishwasherMcpServer();
+  const config = loadMcpConfig();
+  const tokenProvider = config.target === "azure"
+    ? new AzureTokenProvider(config)
+    : undefined;
+  const dashboardClient = new DashboardClient({
+    target: config.target,
+    baseUrl: config.baseUrl,
+    tokenProvider,
+  });
+  const server = createDishwasherMcpServer({ dashboardClient });
   const transport = new StdioServerTransport();
   await server.connect(transport);
 }

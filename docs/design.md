@@ -241,7 +241,54 @@ The Entra app registration must:
 `/healthz` is excluded from Easy Auth and from the Node allowlist. It returns
 only `{"ok":true}` and is used by App Service warm-up and deployment checks.
 
-### 4.2 Home Connect authorization
+### 4.2 Local MCP delegated access
+
+The local stdio MCP server reads live state from exactly one configured target:
+
+- `local` calls the separately running local Node service over HTTP; or
+- `azure` calls the deployed dashboard API over HTTPS with a delegated Entra
+  bearer token.
+
+The target is mandatory. Missing, unsupported, or mixed local/Azure
+configuration stops MCP startup with an actionable error. The MCP never
+automatically retries against the other target.
+
+Azure mode uses a separate tenant-specific public-client app registration.
+The existing Easy Auth registration remains the API registration and exposes a
+least-privilege `Dishwasher.Read` delegated scope. The public client has that
+delegated permission and uses the Mobile and desktop `http://localhost`
+redirect. It has no client secret.
+
+The MCP server connects its stdio transport before it requests authentication.
+The first live-data tool call uses browser-based authorization code flow with
+PKCE. This makes sign-in visible in the user's normal browser without putting a
+device code in process logs or delaying the MCP initialize handshake.
+Documentation tools remain available without authentication.
+
+The access token has:
+
+- the configured Entra tenant as issuer;
+- the Easy Auth API Application ID URI as audience; and
+- the exposed `Dishwasher.Read` delegated scope.
+
+App Service Easy Auth validates the token against its configured
+`allowedAudiences`, then injects the same trusted identity headers used for
+browser sessions. The Node middleware applies the existing tenant-local object
+ID allowlist, so possession of a valid token is not sufficient for access.
+
+Tokens live only in the local MCP process and are not persisted. Restarting the
+MCP server signs the user out and requires browser authentication on the next
+live-data request. Bearer tokens, Easy Auth headers, cookies, Home Connect
+tokens, storage settings, and server internals are not included in MCP output.
+Only the existing sanitized overview and event projections are returned, with
+`source: "local"` or `source: "azure"` metadata.
+
+In Azure mode, the local process does not instantiate the web service,
+`HomeConnectClient`, `DishwasherMonitor`, or storage. The deployed service
+remains the only Home Connect monitoring channel. Local dishwasher manuals are
+read directly from the configured documentation directory in both modes.
+
+### 4.3 Home Connect authorization
 
 Home Connect uses a separate OAuth 2.0 Authorization Code flow.
 
@@ -447,8 +494,10 @@ The Bicep deployment outputs:
 | Resource | Provisioned by | Role |
 |---|---|---|
 | Home Connect developer application | Home Connect portal | Supplies API client ID/secret and registered appliance callback |
-| Microsoft Entra interactive app registration | Entra | Authenticates the browser through Easy Auth |
-| Microsoft Entra interactive service principal | Entra | Tenant-local representation of the interactive app |
+| Microsoft Entra API/web app registration | Entra | Authenticates the browser through Easy Auth and exposes `Dishwasher.Read` |
+| Microsoft Entra API/web service principal | Entra | Tenant-local representation of the Easy Auth API |
+| Microsoft Entra MCP public-client registration | Entra | Uses browser authorization code with PKCE to request delegated `Dishwasher.Read` |
+| Microsoft Entra MCP service principal | Entra consent flow | Stores the tenant-local delegated user consent grant |
 | Entra user/guest objects | Entra | Immutable principal IDs authorized by Node |
 | Azure Table `DishwasherLoop` | Application startup | Stores OAuth settings, event entities, and derived cycle records |
 | GitHub deployment app registration | Azure CLI setup | Trust anchor for GitHub OIDC |
