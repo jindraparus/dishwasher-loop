@@ -8,6 +8,7 @@ const TOKENS_ROW = "oauth";
 const SUPPLIES_ROW = "supplies";
 const EVENTS_PARTITION = "events";
 const CYCLES_PARTITION = "cycles";
+const CONNECTIVITY_PARTITION = "connectivity";
 
 export class Storage {
   constructor(connectionString, tableName, localFile = ".data/dishwasher-loop.json") {
@@ -59,6 +60,38 @@ export class Storage {
       }
       throw error;
     }
+  }
+
+  async getConnectivity(applianceId) {
+    if (this.localFile) {
+      return structuredClone(this.localData.connectivity?.[applianceId] || null);
+    }
+    try {
+      const entity = await this.client.getEntity(CONNECTIVITY_PARTITION, applianceId);
+      return {
+        state: entity.state,
+        offlineSince: entity.offlineSince,
+        alertActive: entity.alertActive,
+      };
+    } catch (error) {
+      if (error.statusCode === 404) return null;
+      throw error;
+    }
+  }
+
+  async saveConnectivity(applianceId, state) {
+    if (this.localFile) {
+      await this.updateLocal((data) => {
+        data.connectivity ||= {};
+        data.connectivity[applianceId] = structuredClone(state);
+      });
+      return;
+    }
+    await this.client.upsertEntity({
+      partitionKey: CONNECTIVITY_PARTITION,
+      rowKey: applianceId,
+      ...state,
+    }, "Replace");
   }
 
   async saveTokens(tokens) {

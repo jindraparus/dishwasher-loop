@@ -1,0 +1,14 @@
+AppServiceConsoleLogs
+| where TimeGenerated > ago(2d)
+| where _ResourceId =~ '__APP_RESOURCE_ID__'
+| where ResultDescription has 'dishwasher.connectivity'
+| extend sample = parse_json(substring(ResultDescription, indexof(ResultDescription, '{')))
+| where sample.event == 'dishwasher.connectivity'
+| extend applianceId = tostring(sample.applianceId),
+         applianceName = tostring(sample.applianceName),
+         observedAt = todatetime(sample.observedAt),
+         offlineSince = tostring(sample.offlineSince),
+         alertActive = tobool(sample.alertActive)
+| summarize arg_max(observedAt, *) by applianceId
+| where alertActive == true
+| project applianceId, applianceName, offlineSince

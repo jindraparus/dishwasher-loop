@@ -110,6 +110,22 @@ Filtering affects event history only; live status messages still update the
 diagnostics panel and cycle tracking. Cycle statistics use `Europe/Prague` by
 default. Set `CYCLE_TIMEZONE` to another IANA timezone if required.
 
+### Offline email alerts
+
+The service checks current dishwasher status every five minutes, independently of the
+event stream. A confirmed Home Connect offline response lasting at least five
+minutes activates durable outage telemetry. API, authentication, and stream
+failures are logged separately; cloud keep-alives cannot establish appliance
+connectivity.
+
+Optional Azure Monitor log alerts and an email Action Group deliver one fired
+notification per sustained outage and a resolved notification after recovery.
+There is no application email service or mailbox credential.
+
+See [connectivity alerts](docs/connectivity-alerts.md) for the separate Bicep
+template, Azure Portal configuration, recipient setup, costs, limitations, and
+end-to-end verification. Deploying application code alone does not enable email.
+
 ## Deploy a new Azure environment
 
 This section is the complete setup sequence for a new subscription or
