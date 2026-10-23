@@ -71,12 +71,21 @@ authenticated `GET /api/dashboard` endpoint and renders each dashboard tile
 through a focused client component. It refreshes data in place every 30 seconds
 without navigating or reloading the document.
 
-The dashboard API reads the optional capsule count from the shared persistence
+The dashboard API reads the capsule count from the shared persistence
 layer. Azure stores it in the `settings` / `supplies` Table Storage entity, while
 local development reads `capsuleCount` from `.data/dishwasher-loop.json`. The
 value must be a whole number from 0 through 999. Missing or invalid values are
-shown as unavailable. This version intentionally provides no UI or API for
-writing the value. OAuth login, callback, and disconnect remain full browser
+initialized durably to 50; valid existing values, including zero, are preserved.
+A top-right gear opens a native modal dialog to replace the absolute count.
+Saving uses `PUT /api/supplies/capsules` with JSON `{ "capsuleCount": 75 }`
+and returns the persisted count. The route requires an Origin matching the
+configured Home Connect redirect origin and, in Azure, the allowlisted user's
+Easy Auth browser session. Bearer-token requests are rejected, keeping existing
+MCP read access read-only. Cross-origin requests, non-JSON bodies, invalid
+counts, and persistence failures are reported explicitly. Local mode retains
+its authentication exemption but still checks the Origin.
+Dashboard refresh pauses while the modal is open so edits/focus are preserved.
+OAuth login, callback, and disconnect remain full browser
 navigations because they cross an authentication boundary.
 
 The UI includes:
@@ -86,7 +95,7 @@ The UI includes:
 - current Home Connect status values;
 - active program, progress, adjusted remaining time, and estimated finish;
 - salt and rinse-aid refill warnings;
-- read-only washing-capsule inventory from shared storage;
+- washing-capsule inventory with an absolute-count settings dialog;
 - recommendations derived from connectivity, operation state, warnings, and
   capsule inventory;
 - observed washing-cycle history plus weekly and monthly statistics;
@@ -157,13 +166,34 @@ Azure Table Storage uses three partitions:
 | Partition key | Row key | Contents |
 |---|---|---|
 | `settings` | `oauth` | Home Connect access token, refresh token, and expiry |
-| `settings` | `supplies` | Optional read-only washing-capsule count |
+| `settings` | `supplies` | Washing-capsule count and accounting snapshot timestamp |
+| `settings` | `capsule-` plus hashed cycle ID | Durable once-per-cycle consumption marker |
 | `events` | timestamp plus UUID | Appliance identity, event metadata, receipt time, and JSON payload |
 | `cycles` | deterministic cycle ID | Program, observed boundaries, result, confidence, evidence, gaps, and derived duration |
 
 Tokens, events, and cycles survive App Service restarts. Azure Storage encrypts the
 storage account at rest. The application reaches the account through a storage
 connection string in App Service settings.
+
+Saving a finished cycle also accounts for one capsule, clamped at zero.
+Both observed and inferred completions qualify; running/incomplete cycles do
+not. A durable snapshot timestamp is initialized with inventory and advanced
+on each physical-count edit. Only completions strictly after that timestamp
+are eligible, excluding legacy backfill and late discoveries before an edit.
+Consumption markers survive count edits and prevent duplicate deductions,
+including cycles accounted for at zero. One capsule per completed program is
+an estimate, not a detergent sensor.
+
+Azure persists the cycle first, then atomically commits an ETag-conditional
+count update and unique marker in the settings partition, with bounded conflict
+retries. Startup reconciles saved finished cycles (including cycles absent from
+event history), repairing a crash between cycle persistence and deduction.
+Local mode serializes all read/mutate/write operations and replaces its JSON
+file atomically before publishing updated in-memory state. It stores markers
+in `capsuleCycles` and the snapshot in `capsuleSnapshotAt`; use one local
+application process per file. Storage failures propagate to API/monitor errors
+and durable cycles allow recovery at restart. Markers are retained for replay
+protection; there is no inventory-history UI.
 
 The UI reads the latest 200 events. Diagnostics replay these events oldest to
 newest during monitor initialization so warning state, including salt and rinse

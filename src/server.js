@@ -12,6 +12,7 @@ import { HomeConnectClient } from "./home-connect.js";
 import { requireAllowedMicrosoftUser } from "./microsoft-auth.js";
 import { DishwasherMonitor } from "./monitor.js";
 import { Storage } from "./storage.js";
+import { capsuleSettingsRouter } from "./supplies.js";
 
 const config = loadConfig();
 const indexPath = fileURLToPath(new URL("../public/index.html", import.meta.url));
@@ -39,6 +40,7 @@ app.get("/healthz", (request, response) => {
 });
 
 app.use(requireAllowedMicrosoftUser(config));
+app.use(capsuleSettingsRouter(storage, config));
 
 app.get("/api/dashboard", async (request, response, next) => {
   try {

@@ -2,6 +2,14 @@ export function getDashboard() {
   return request("/api/dashboard");
 }
 
+export function saveCapsuleCount(capsuleCount) {
+  return request("/api/supplies/capsules", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ capsuleCount }),
+  });
+}
+
 async function request(url, options = {}) {
   const response = await fetch(url, {
     cache: "no-store",

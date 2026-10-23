@@ -24,6 +24,9 @@ export class CycleTracker {
     });
     const cycles = await this.storage.listAllCycles();
     for (const cycle of cycles) {
+      if (cycle.status === "finished") {
+        await this.storage.saveCycle(cycle);
+      }
       this.cycles.set(cycle.cycleId, structuredClone(cycle));
       const state = this.stateFor(cycle.applianceId);
       if (cycle.status === "running"
@@ -51,6 +54,9 @@ export class CycleTracker {
       (item) => item.sourceEventIds.includes(sourceId),
     );
     if (alreadyProcessed) {
+      if (persist) {
+        await this.storage.saveCycle(alreadyProcessed);
+      }
       this.updateLastState(state, signals);
       return structuredClone(alreadyProcessed);
     }

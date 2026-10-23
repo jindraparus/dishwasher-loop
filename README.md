@@ -8,7 +8,7 @@ Dishwasher Loop is a small Node.js service that:
 - persists status, event, and notification messages;
 - derives durable washing-cycle history from observed Home Connect signals;
 - shows a dashboard with current appliance diagnostics, active wash progress
-  and remaining time, salt status, read-only washing-capsule inventory,
+  and remaining time, salt status, editable washing-capsule inventory,
   recommendations, cycle statistics, recent cycles, and the latest 200 events;
 - updates the single-page dashboard in place without full-page refreshes; and
 - protects the Azure-hosted UI with Microsoft sign-in and an explicit user
@@ -62,6 +62,25 @@ npm start
 ```
 
 Open http://localhost:3000 and choose **Connect Home Connect**.
+
+### Capsule inventory
+
+Use the gear button at the top right to open **Nastavení zásob**. Enter the
+total number of capsules currently at home (0–999), then choose **Uložit**.
+Cancel or Escape leaves the count unchanged.
+
+Inventory starts at **50** when no valid saved count exists; existing counts,
+including zero, are preserved. The count is stored alongside the current
+settings in local JSON or Azure Table Storage and survives restarts.
+Each completed washing cycle, including an inferred completion, consumes one
+capsule. Incomplete/cancelled cycles do not consume capsules. Counts never go
+below zero, and duplicate completion signals do not consume extra capsules.
+
+Tracking starts when this feature is first activated; historical washes are
+not charged. An absolute edit represents the physical count at save time, so
+earlier completions discovered later are excluded. Every completed program is
+assumed to use one capsule; correct exceptions manually. Existing low-stock
+recommendations and read-only MCP behavior are unchanged.
 
 Run the test suite with:
 

@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { TableClient } from "@azure/data-tables";
@@ -34,11 +34,12 @@ export class Storage {
           });
         }
         this.localData = { tokens: null, events: [], cycles: [] };
-        await this.persistLocal();
       }
+      await this.updateCapsules();
       return;
     }
     await this.client.createTable();
+    await this.updateCapsules();
   }
 
   async getTokens() {
@@ -62,8 +63,7 @@ export class Storage {
 
   async saveTokens(tokens) {
     if (this.localFile) {
-      this.localData.tokens = { ...tokens };
-      await this.persistLocal();
+      await this.updateLocal((data) => { data.tokens = { ...tokens }; });
       return;
     }
     await this.client.upsertEntity({
@@ -77,8 +77,7 @@ export class Storage {
 
   async deleteTokens() {
     if (this.localFile) {
-      this.localData.tokens = null;
-      await this.persistLocal();
+      await this.updateLocal((data) => { data.tokens = null; });
       return;
     }
     try {
@@ -105,6 +104,86 @@ export class Storage {
     }
   }
 
+  async setCapsuleCount(count) {
+    if (validCapsuleCount(count) === null) {
+      throw new RangeError("Počet tablet musí být celé číslo od 0 do 999.");
+    }
+    return this.updateCapsules({ count });
+  }
+
+  async updateCapsules({ count, cycle } = {}) {
+    const marker = cycle
+      ? `capsule-${createHash("sha256").update(cycle.cycleId).digest("hex")}`
+      : null;
+    const apply = (supplies, accounted = false) => {
+      const next = { ...supplies };
+      next.capsuleCount = validCapsuleCount(next.capsuleCount) ?? 50;
+      next.capsuleSnapshotAt ||= new Date().toISOString();
+      if (count !== undefined) {
+        next.capsuleCount = count;
+        next.capsuleSnapshotAt = new Date().toISOString();
+      }
+      const consume = !accounted && cycle?.status === "finished"
+        && cycle.result === "finished"
+        && Date.parse(cycle.finishedAt) > Date.parse(next.capsuleSnapshotAt);
+      if (consume) {
+        next.capsuleCount = Math.max(0, next.capsuleCount - 1);
+      }
+      return { next, consume };
+    };
+    if (this.localFile) {
+      return this.updateLocal((data) => {
+        const { next, consume } = apply(data, Boolean(data.capsuleCycles?.[marker]));
+        data.capsuleCount = next.capsuleCount;
+        data.capsuleSnapshotAt = next.capsuleSnapshotAt;
+        if (consume) {
+          data.capsuleCycles ||= {};
+          data.capsuleCycles[marker] = true;
+        }
+        return data.capsuleCount;
+      });
+    }
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      const supplies = await this.getOptionalEntity(SUPPLIES_ROW);
+      const accounted = marker && await this.getOptionalEntity(marker);
+      const { next, consume } = apply(supplies || {}, Boolean(accounted));
+      if (count === undefined && !consume && supplies
+        && supplies.capsuleCount === next.capsuleCount
+        && supplies.capsuleSnapshotAt === next.capsuleSnapshotAt) {
+        return next.capsuleCount;
+      }
+      const entity = {
+        partitionKey: SETTINGS_PARTITION,
+        rowKey: SUPPLIES_ROW,
+        capsuleCount: next.capsuleCount,
+        capsuleSnapshotAt: next.capsuleSnapshotAt,
+      };
+      const actions = supplies
+        ? [["update", entity, "Merge", { etag: supplies.etag }]]
+        : [["create", entity]];
+      if (consume) {
+        actions.push(["create", { partitionKey: SETTINGS_PARTITION, rowKey: marker }]);
+      }
+      try {
+        await this.client.submitTransaction(actions);
+        return next.capsuleCount;
+      } catch (error) {
+        if (![409, 412].includes(error.statusCode) || attempt === 7) {
+          throw error;
+        }
+      }
+    }
+  }
+
+  async getOptionalEntity(rowKey) {
+    try {
+      return await this.client.getEntity(SETTINGS_PARTITION, rowKey);
+    } catch (error) {
+      if (error.statusCode === 404) return null;
+      throw error;
+    }
+  }
+
   async saveEvent({
     applianceId,
     applianceName,
@@ -114,15 +193,14 @@ export class Storage {
     receivedAt = new Date().toISOString(),
   }) {
     if (this.localFile) {
-      this.localData.events.push({
+      await this.updateLocal((dataStore) => dataStore.events.push({
         applianceId,
         applianceName,
         eventType: eventType || "message",
         eventId: eventId || "",
         receivedAt,
         data,
-      });
-      await this.persistLocal();
+      }));
       return receivedAt;
     }
     await this.client.createEntity({
@@ -172,18 +250,17 @@ export class Storage {
   async saveCycle(cycle) {
     const stored = structuredClone(cycle);
     if (this.localFile) {
-      const index = this.localData.cycles.findIndex(
-        (item) => item.cycleId === stored.cycleId,
-      );
-      if (index === -1) {
-        this.localData.cycles.push(stored);
-      } else {
-        this.localData.cycles[index] = stored;
-      }
-      await this.persistLocal();
-      return;
+      await this.updateLocal((data) => {
+        const index = data.cycles.findIndex((item) => item.cycleId === stored.cycleId);
+        if (index === -1) data.cycles.push(stored);
+        else data.cycles[index] = stored;
+      });
+    } else {
+      await this.client.upsertEntity(cycleToEntity(stored), "Replace");
     }
-    await this.client.upsertEntity(cycleToEntity(stored), "Replace");
+    if (stored.status === "finished" && stored.result === "finished") {
+      await this.updateCapsules({ cycle: stored });
+    }
   }
 
   async listCycles(limit = 50) {
@@ -206,13 +283,17 @@ export class Storage {
     return cycles.sort(compareCycles);
   }
 
-  persistLocal() {
-    const temporaryFile = `${this.localFile}.${process.pid}.${randomUUID()}.tmp`;
+  updateLocal(mutate) {
     const write = this.writePromise.then(async () => {
-      await writeFile(temporaryFile, JSON.stringify(this.localData, null, 2), {
+      const next = structuredClone(this.localData);
+      const result = mutate(next);
+      const temporaryFile = `${this.localFile}.${process.pid}.${randomUUID()}.tmp`;
+      await writeFile(temporaryFile, JSON.stringify(next, null, 2), {
         mode: 0o600,
       });
       await rename(temporaryFile, this.localFile);
+      this.localData = next;
+      return result;
     });
     this.writePromise = write.catch(() => {});
     return write;

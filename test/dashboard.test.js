@@ -71,6 +71,8 @@ test("renders appliance metadata and current status diagnostics", () => {
   assert.match(html, /Odhad dokončení/);
   assert.match(html, /<strong>37%<\/strong>/);
   assert.match(html, /Zásoby/);
+  assert.match(html, /aria-label="Nastavení zásob"/);
+  assert.match(html, /aria-controls="capsule-settings"/);
   assert.match(html, /Doporučení/);
   assert.match(html, /Bosch · Myčka nádobí · SMV6/);
   assert.match(html, /Provozní stav/);

@@ -90,6 +90,29 @@ h3 { font-size: 1rem; margin-bottom: .2rem; }
 .button:hover { background: var(--primary-dark); }
 .button:disabled { cursor: wait; opacity: .65; }
 .button-secondary { background: transparent; border: 1px solid var(--line); color: var(--ink); }
+.settings-button { font-size: 1.35rem; line-height: 1; padding: .7rem; }
+dialog {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 1.1rem;
+  box-shadow: var(--shadow);
+  color: var(--ink);
+  max-width: min(440px, calc(100vw - 2rem));
+  padding: 1.5rem;
+}
+dialog::backdrop { background: rgba(22, 51, 59, .45); }
+dialog h2 { margin-bottom: 1rem; }
+dialog label { display: block; font-weight: 650; }
+dialog input {
+  border: 1px solid var(--line);
+  border-radius: .5rem;
+  margin: .5rem 0;
+  padding: .6rem;
+  width: 100%;
+}
+dialog .actions { justify-content: flex-end; margin-top: 1.25rem; }
+:focus-visible { outline: 3px solid var(--primary); outline-offset: 3px; }
+.sr-only { clip-path: inset(50%); height: 1px; overflow: hidden; position: absolute; width: 1px; }
 .error {
   background: var(--danger-soft);
   border: 1px solid #f2c5c2;

@@ -15,6 +15,10 @@ export function renderHeader({ authorized, monitorStatus }) {
       ${authorized
         ? `<form method="post" action="/auth/disconnect"><button class="button button-secondary" type="submit">Odpojit</button></form>`
         : `<a class="button" href="/auth/login">Připojit Home Connect</a>`}
+      <button class="button button-secondary settings-button" type="button" data-settings
+        aria-label="Nastavení zásob" aria-haspopup="dialog" aria-controls="capsule-settings">
+        <span aria-hidden="true">&#9881;</span>
+      </button>
     </div>
   </header>`;
 }

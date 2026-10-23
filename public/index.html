@@ -10,6 +10,21 @@
     <div id="app">
       <main class="loading-state" aria-live="polite">Načítání přehledu myčky…</main>
     </div>
+    <dialog id="capsule-settings" aria-labelledby="settings-title">
+      <form id="capsule-form">
+        <h2 id="settings-title">Nastavení zásob</h2>
+        <label for="capsule-count">Aktuální počet tablet do myčky</label>
+        <input id="capsule-count" name="capsuleCount" type="number"
+          min="0" max="999" step="1" required autofocus aria-describedby="capsule-help">
+        <p id="capsule-help" class="subtle">Zadejte celkový počet tablet, které máte doma (0–999).</p>
+        <p id="capsule-error" class="error" role="alert" hidden></p>
+        <div class="actions">
+          <button class="button" type="submit">Uložit</button>
+          <button class="button button-secondary" type="button" data-cancel-settings>Zrušit</button>
+        </div>
+      </form>
+    </dialog>
+    <p id="settings-status" class="sr-only" role="status"></p>
     <script type="module" src="/app.js"></script>
   </body>
 </html>
