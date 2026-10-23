@@ -72,6 +72,12 @@ workspace/Action Group through the Portal path below instead of deploying
 duplicate resources.
 
 There is no SMTP, Graph mail permission, or application email credential.
+New email receivers require mailbox verification. Azure sends a verification
+email when the Action Group is saved; complete its Microsoft-hosted OTP flow
+within 30 minutes. If it expires, use **Resend** in the Action Group notification
+settings. Never put the OTP or tokenized verification link in logs or chat.
+An unverified address cannot receive alerts or test notifications, even when
+the receiver's ordinary `status` is `Enabled`.
 Workspace ingestion/retention, log-search alert evaluation, and notifications
 are subject to Azure pricing. App Service Always On must remain enabled.
 No infrastructure deployment is performed by the application's GitHub workflow.
@@ -118,6 +124,10 @@ before enabling the rule; successful Bicep compilation is not query validation.
    **common alert schema**. Use **Test** to verify inbox delivery and check
    junk/spam folders. Respect any subscription/unsubscribe options in Azure's
    notification emails.
+   Complete the email verification first; if Azure reports "There are no valid
+   receivers in the request," check `verificationStatus`, not just `status`.
+   The `2026-03-01-preview` Action Groups read API exposes it; pending mailbox
+   verification appears as `VerificationPending`.
 5. Create a **Log search** alert rule scoped to the workspace. Use
    [offline-alert.kql](../infra/offline-alert.kql), replacing
    `__APP_RESOURCE_ID__` with the Web App's full Azure resource ID. The query
@@ -167,10 +177,14 @@ If no email arrives, check, in order:
 - the alert fired and has the intended Action Group attached;
 - no alert-processing rule suppresses actions;
 - the Action Group test succeeds and the recipient has not unsubscribed;
+- the receiver has completed OTP verification; `status: Enabled` alone is
+  insufficient (check `verificationStatus` with the current preview API);
 - Azure **Service Health**, Action Group diagnostic options, and mail filtering.
 
 There is no application-side email retry queue. Delivery problems must be
 investigated in Azure Monitor rather than by changing Home Connect credentials.
+See [Action Groups notification requirements](https://learn.microsoft.com/en-us/azure/azure-monitor/alerts/action-groups)
+for the current verification rules.
 
 ## Verification before closing the issue
 
