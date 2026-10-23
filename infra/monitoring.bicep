@@ -70,7 +70,7 @@ resource offlineAlert 'Microsoft.Insights/scheduledQueryRules@2023-12-01' = {
     description: 'Home Connect confirmed the appliance offline for at least five minutes. Dimensions identify the appliance and UTC detection time. Check Home Connect and the dashboard. Do not interrupt an active software update.'
     severity: 2
     enabled: alertEnabled
-    evaluationFrequency: 'PT1M'
+    evaluationFrequency: 'PT5M'
     windowSize: 'P2D'
     scopes: [
       workspace.id

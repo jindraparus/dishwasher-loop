@@ -124,9 +124,10 @@ before enabling the rule; successful Bicep compilation is not query validation.
    selects the most recent sample per appliance **before** testing the active
    flag, so old offline samples cannot override a newer recovery.
 6. Set **Measure: Table rows**, **Aggregation: Count**,
-   **Operator: Greater than**, **Threshold: 0**. Evaluate every **1 minute** with
+   **Operator: Greater than**, **Threshold: 0**. Evaluate every **5 minutes** with
    a **2-day lookback/query time range**. The application already applies the
    five-minute grace period; do not add another five-minute failing-period gate.
+   A one-minute Azure evaluation does not support this two-day window.
 7. Split by `applianceId`, `applianceName`, and `offlineSince`, including all
    current and future values. These dimensions put the appliance and first
    detection time (UTC) in the email's alert context.
