@@ -161,7 +161,7 @@ Azure deployments use one Azure Table Storage table named `DishwasherLoop`.
 Local development uses `.data/dishwasher-loop.json` through the same storage
 interface.
 
-Azure Table Storage uses three partitions:
+Azure Table Storage uses four partitions:
 
 | Partition key | Row key | Contents |
 |---|---|---|
@@ -170,6 +170,7 @@ Azure Table Storage uses three partitions:
 | `settings` | `capsule-` plus hashed cycle ID | Durable once-per-cycle consumption marker |
 | `events` | timestamp plus UUID | Appliance identity, event metadata, receipt time, and JSON payload |
 | `cycles` | deterministic cycle ID | Program, observed boundaries, result, confidence, evidence, gaps, and derived duration |
+| `connectivity` | appliance ID | Last confirmed connectivity, first offline detection time, and active-outage flag |
 
 Tokens, events, and cycles survive App Service restarts. Azure Storage encrypts the
 storage account at rest. The application reaches the account through a storage
@@ -479,14 +480,24 @@ An ended stream is treated as an error. The monitor:
 - rediscovers appliances;
 - reloads status and persisted diagnostics;
 - reconnects all streams; and
-- applies exponential retry delay from one second up to 60 seconds.
+- applies exponential retry delay from one second up to five minutes, with
+  five-minute spacing for confirmed offline failures and respect for rate limits.
 
 An open cycle remains unresolved across a disconnect. The tracker records the
 observation gap and resumes the same record after reconnection. Disconnect,
 restart, and timeout timestamps are never used as fabricated cycle boundaries.
 
-Authentication-required errors stop the monitor until the user reconnects Home
-Connect.
+Authentication-required errors stop event-stream monitoring until the user
+reconnects Home Connect. Independent five-minute current-status checks continue
+for already discovered appliances and classify authorization failures separately.
+Historical events and cloud keep-alives never establish appliance connectivity.
+
+Confirmed Home Connect offline responses activate an outage after five minutes;
+the outage identity survives restarts. A successful current status read clears
+it. The optional Azure Monitor configuration consumes safe structured console
+telemetry and uses a stateful log alert plus an email Action Group, rather than
+an application email service. See [connectivity alerts](connectivity-alerts.md)
+for deployment, recipient configuration, query behavior, and limitations.
 
 ## 6. Azure architecture
 

@@ -1,5 +1,10 @@
-import { AuthenticationRequiredError } from "./home-connect.js";
+import { AuthenticationRequiredError, HomeConnectError, homeConnectFailureKind } from "./home-connect.js";
 import { consumeSse } from "./sse.js";
+import {
+  ConnectivityTracker,
+  logHomeConnectFailure,
+  STATUS_CHECK_INTERVAL_MS,
+} from "./connectivity.js";
 
 const CONSUMABLE_EVENTS = {
   "Dishcare.Dishwasher.Event.SaltNearlyEmpty": "salt",
@@ -20,6 +25,10 @@ export class DishwasherMonitor {
     this.running = false;
     this.status = "Nepřipojeno";
     this.diagnostics = [];
+    this.connectivity = new ConnectivityTracker(storage, logger);
+    this.statusChecks = new Map();
+    this.rateLimitedUntil = 0;
+    this.rateLimitError = null;
   }
 
   start() {
@@ -27,6 +36,7 @@ export class DishwasherMonitor {
     this.controller = new AbortController();
     this.running = true;
     void this.run(this.controller.signal);
+    void this.runStatusChecks(this.controller.signal);
   }
 
   stop() {
@@ -48,8 +58,15 @@ export class DishwasherMonitor {
   async run(signal) {
     let retryDelay = 1_000;
     while (!signal.aborted) {
+      let operation = "discovery";
       try {
-        const dishwashers = await this.client.listDishwashers();
+        if (this.rateLimitedUntil > Date.now()) {
+          await delay(this.rateLimitedUntil - Date.now(), signal);
+          if (signal.aborted) return;
+        }
+        const dishwashers = await this.client.listDishwashers(
+          AbortSignal.any([signal, AbortSignal.timeout(20_000)]),
+        );
         if (dishwashers.length === 0) {
           this.status = "Připojeno, ale nebyla nalezena žádná myčka";
           await delay(60_000, signal);
@@ -57,46 +74,45 @@ export class DishwasherMonitor {
         }
 
         this.status = monitoredDishwashersLabel(dishwashers.length);
-        await this.loadDiagnostics(dishwashers);
+        operation = "monitor";
+        await this.loadDiagnostics(dishwashers, signal);
+        if (this.diagnostics.every((diagnostic) => diagnostic.connected === false)) {
+          await delay(STATUS_CHECK_INTERVAL_MS, signal);
+          continue;
+        }
         await this.monitorAll(dishwashers, signal);
         retryDelay = 1_000;
       } catch (error) {
         if (signal.aborted) {
           return;
         }
+        logHomeConnectFailure(this.logger, operation, error);
+        this.noteRateLimit(error);
         if (error instanceof AuthenticationRequiredError) {
           this.status = "Je vyžadována autorizace";
           this.running = false;
           return;
         }
         this.status = `Opětovné připojení po chybě: ${error.message}`;
-        this.logger.error("Home Connect monitor error", error);
-        await delay(retryDelay, signal);
-        retryDelay = Math.min(retryDelay * 2, 60_000);
+        const wait = homeConnectFailureKind(error) === "appliance_offline"
+          ? STATUS_CHECK_INTERVAL_MS : retryDelay;
+        await delay(Math.max(wait, this.rateLimitedUntil - Date.now()), signal);
+        retryDelay = Math.min(retryDelay * 2, STATUS_CHECK_INTERVAL_MS);
       }
     }
   }
 
-  async loadDiagnostics(appliances) {
-    this.diagnostics = await Promise.all(appliances.map(async (appliance) => {
-      let statusItems = [];
-      let statusError = "";
-      try {
-        statusItems = await this.client.getApplianceStatus(appliance.haId);
-      } catch (error) {
-        statusError = error.message;
-        this.logger.warn(`Unable to load status for ${appliance.haId}`, error);
-      }
-
-      return {
+  async loadDiagnostics(appliances, signal) {
+    const existing = new Map(this.diagnostics.map((item) => [item.id, item]));
+    this.diagnostics = appliances.map((appliance) => existing.get(appliance.haId) || ({
         id: appliance.haId,
         name: appliance.name || appliance.brand || "Myčka nádobí",
         brand: appliance.brand || "",
         type: appliance.type || "Myčka nádobí",
         model: appliance.enumber || appliance.vib || "",
-        connected: appliance.connected,
-        statusItems,
-        statusError,
+        connected: null,
+        statusItems: [],
+        statusError: "",
         consumables: {
           salt: unknownConsumableStatus(),
           rinseAid: unknownConsumableStatus(),
@@ -110,16 +126,84 @@ export class DishwasherMonitor {
         },
         lastEventType: "",
         lastEventAt: "",
-      };
-    }));
+      }));
+    if (existing.size === 0) {
+      const recentEvents = await this.storage.listEvents(200);
+      for (const event of recentEvents.toReversed()) {
+        this.updateDiagnostics(event.applianceId, {
+          event: event.eventType,
+          data: event.data,
+          receivedAt: event.receivedAt,
+        });
+      }
+    }
+    await Promise.all(this.diagnostics
+      .filter((diagnostic) => !existing.has(diagnostic.id))
+      .map((diagnostic) => this.refreshStatus(diagnostic, signal)));
+  }
 
-    const recentEvents = await this.storage.listEvents(200);
-    for (const event of recentEvents.toReversed()) {
-      this.updateDiagnostics(event.applianceId, {
-        event: event.eventType,
-        data: event.data,
-        receivedAt: event.receivedAt,
-      });
+  async refreshStatus(diagnostic, signal) {
+    const existing = this.statusChecks.get(diagnostic.id);
+    if (existing) return existing;
+    const check = this.checkStatus(diagnostic, signal);
+    this.statusChecks.set(diagnostic.id, check);
+    try {
+      await check;
+    } finally {
+      if (this.statusChecks.get(diagnostic.id) === check) {
+        this.statusChecks.delete(diagnostic.id);
+      }
+    }
+  }
+
+  async checkStatus(diagnostic, signal) {
+    let statusItems;
+    let failure = null;
+    const paused = this.rateLimitedUntil > Date.now();
+    try {
+      if (paused) throw this.rateLimitError;
+      statusItems = await this.client.getApplianceStatus(
+        diagnostic.id,
+        AbortSignal.any([AbortSignal.timeout(20_000), ...(signal ? [signal] : [])]),
+      );
+    } catch (error) {
+      if (signal?.aborted) return;
+      failure = error;
+      if (!paused) this.noteRateLimit(error);
+      logHomeConnectFailure(this.logger, "status", error, diagnostic.id);
+    }
+    if (signal?.aborted) return;
+    const result = await this.connectivity.record({
+      haId: diagnostic.id,
+      name: diagnostic.name,
+    }, failure);
+    diagnostic.connected = result === "unknown" ? null : result === "online";
+    diagnostic.statusError = failure?.message || "";
+    if (!failure) diagnostic.statusItems = statusItems;
+  }
+
+  noteRateLimit(error) {
+    if (error instanceof HomeConnectError && error.status === 429) {
+      this.rateLimitedUntil = Math.max(
+        this.rateLimitedUntil,
+        Date.now() + Math.max(STATUS_CHECK_INTERVAL_MS, error.retryAfterMs),
+      );
+      this.rateLimitError = error;
+    }
+  }
+
+  async runStatusChecks(signal) {
+    while (!signal.aborted) {
+      await delay(STATUS_CHECK_INTERVAL_MS, signal);
+      if (signal.aborted) return;
+      for (const diagnostic of this.diagnostics) {
+        try {
+          await this.refreshStatus(diagnostic, signal);
+        } catch (error) {
+          if (signal.aborted) return;
+          this.logger.error("Unable to persist connectivity check", error);
+        }
+      }
     }
   }
 
@@ -178,6 +262,7 @@ export class DishwasherMonitor {
       }
     } catch (error) {
       if (!signal.aborted) {
+        logHomeConnectFailure(this.logger, "event_stream", error, appliance.haId);
         await this.cycleTracker?.recordDisconnect(appliance.haId);
       }
       throw error;
@@ -190,7 +275,6 @@ export class DishwasherMonitor {
       return;
     }
 
-    diagnostic.connected = true;
     const receivedAt = message.receivedAt || new Date().toISOString();
     diagnostic.lastEventType = message.event;
     diagnostic.lastEventAt = receivedAt;
@@ -294,10 +378,18 @@ function monitoredDishwashersLabel(count) {
 
 function delay(milliseconds, signal) {
   return new Promise((resolve) => {
-    const timeout = setTimeout(resolve, milliseconds);
-    signal.addEventListener("abort", () => {
+    if (signal.aborted) {
+      resolve();
+      return;
+    }
+    const onAbort = () => {
       clearTimeout(timeout);
       resolve();
-    }, { once: true });
+    };
+    const timeout = setTimeout(() => {
+      signal.removeEventListener("abort", onAbort);
+      resolve();
+    }, milliseconds);
+    signal.addEventListener("abort", onAbort, { once: true });
   });
 }
