@@ -2,6 +2,19 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { renderDashboard } from "../public/components/dashboard.js";
 import { buildRecommendations } from "../public/components/recommendations.js";
+import { renderDiagnosticsCard } from "../public/components/diagnostics.js";
+
+test("renders unknown connectivity without claiming the appliance is connected", () => {
+  const html = renderDiagnosticsCard([{
+    name: "Dishwasher",
+    type: "Dishwasher",
+    connected: null,
+    statusItems: [],
+    statusError: "Home Connect API unavailable",
+  }]);
+  assert.match(html, /<dd>Neznámé<\/dd>/);
+  assert.doesNotMatch(html, /<dd>Připojeno<\/dd>/);
+});
 
 test("renders appliance metadata and current status diagnostics", () => {
   const html = renderDashboard({

@@ -151,3 +151,55 @@ test("round-trips cycle entities through the Azure Table representation", () => 
     rowKey: entity.rowKey,
   }), cycle);
 });
+
+test("connectivity state and outage identity survive local storage reloads", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "dishwasher-connectivity-"));
+  const file = path.join(directory, "storage.json");
+  try {
+    const storage = new Storage("local", "unused", file);
+    await storage.initialize();
+    assert.equal(await storage.getConnectivity("dishwasher"), null);
+    const state = {
+      state: "offline", offlineSince: "2026-10-23T18:00:00.000Z", alertActive: true,
+    };
+    await storage.saveConnectivity("dishwasher", state);
+    const reloaded = new Storage("local", "unused", file);
+    await reloaded.initialize();
+    assert.deepEqual(await reloaded.getConnectivity("dishwasher"), state);
+    const copy = await reloaded.getConnectivity("dishwasher");
+    copy.alertActive = false;
+    assert.equal((await reloaded.getConnectivity("dishwasher")).alertActive, true);
+    await reloaded.saveConnectivity("dishwasher", {
+      state: "online", offlineSince: "", alertActive: false,
+    });
+    assert.equal((await reloaded.getConnectivity("dishwasher")).state, "online");
+  } finally {
+    await rm(directory, { recursive: true });
+  }
+});
+
+test("Azure connectivity entities round-trip and surface non-404 failures", async () => {
+  const storage = new Storage("local", "unused");
+  storage.localFile = null;
+  const entities = new Map();
+  storage.client = {
+    async getEntity(partition, row) {
+      if (!entities.has(row)) throw Object.assign(new Error("Missing"), { statusCode: 404 });
+      assert.equal(partition, "connectivity");
+      return entities.get(row);
+    },
+    async upsertEntity(entity, mode) {
+      assert.equal(entity.partitionKey, "connectivity");
+      assert.equal(mode, "Replace");
+      entities.set(entity.rowKey, entity);
+    },
+  };
+  assert.equal(await storage.getConnectivity("dishwasher"), null);
+  const state = { state: "offline", offlineSince: "2026-10-23T18:00:00.000Z", alertActive: true };
+  await storage.saveConnectivity("dishwasher", state);
+  assert.deepEqual(await storage.getConnectivity("dishwasher"), state);
+  storage.client.getEntity = async () => { throw Object.assign(new Error("Forbidden"), { statusCode: 403 }); };
+  await assert.rejects(storage.getConnectivity("dishwasher"), /Forbidden/);
+  storage.client.upsertEntity = async () => { throw new Error("Write failed"); };
+  await assert.rejects(storage.saveConnectivity("dishwasher", state), /Write failed/);
+});

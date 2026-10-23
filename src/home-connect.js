@@ -51,20 +51,24 @@ export class HomeConnectClient {
     return refreshed.accessToken;
   }
 
-  async listDishwashers() {
-    const response = await this.authenticatedFetch(APPLIANCES_PATH);
+  async listDishwashers(signal) {
+    const response = await this.authenticatedFetch(APPLIANCES_PATH, { signal });
     const body = await parseJsonResponse(response);
     return (body.data?.homeappliances || []).filter(
       (appliance) => appliance.type?.toLowerCase() === "dishwasher",
     );
   }
 
-  async getApplianceStatus(applianceId) {
+  async getApplianceStatus(applianceId, signal) {
     const response = await this.authenticatedFetch(
       `${APPLIANCES_PATH}/${encodeURIComponent(applianceId)}/status`,
+      { signal },
     );
     const body = await parseJsonResponse(response);
-    return body.data?.status || [];
+    if (!Array.isArray(body.data?.status)) {
+      throw new Error("Home Connect vrátil neplatný stav spotřebiče");
+    }
+    return body.data.status;
   }
 
   async openEventStream(applianceId, signal) {
@@ -96,8 +100,7 @@ export class HomeConnectClient {
     }
 
     if (!response.ok) {
-      const detail = await response.text();
-      throw new Error(`Požadavek Home Connect selhal (${response.status}): ${detail}`);
+      throw await homeConnectResponseError(response);
     }
     return response;
   }
@@ -116,6 +119,7 @@ export class HomeConnectClient {
       new URL(TOKEN_PATH, this.config.homeConnectBaseUrl),
       {
         method: "POST",
+        signal: AbortSignal.timeout(20_000),
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: new URLSearchParams({
           ...parameters,
@@ -124,12 +128,10 @@ export class HomeConnectClient {
         }),
       },
     );
-    const body = await parseJsonResponse(response);
     if (!response.ok) {
-      throw new Error(
-        `Požadavek Home Connect na token selhal (${response.status}): ${JSON.stringify(body)}`,
-      );
+      throw await homeConnectResponseError(response, "token");
     }
+    const body = await parseJsonResponse(response);
     if (!body.access_token || !(body.refresh_token || previousRefreshToken) || !body.expires_in) {
       throw new Error("Home Connect vrátil neúplnou odpověď s tokenem");
     }
@@ -142,11 +144,58 @@ export class HomeConnectClient {
   }
 }
 
+export class HomeConnectError extends Error {
+  constructor(status, error, operation = "api", retryAfterMs = 0) {
+    const offline = status === 409
+      && error?.key === "SDK.Error.HomeAppliance.Connection.Initialization.Failed"
+      && error?.description === "HomeAppliance is offline";
+    super(`Požadavek Home Connect selhal (${status})${offline ? ": HomeAppliance is offline" : ""}`);
+    this.name = "HomeConnectError";
+    this.status = status;
+    this.operation = operation;
+    this.offline = offline;
+    this.retryAfterMs = retryAfterMs;
+  }
+}
+
+export function homeConnectFailureKind(error) {
+  if (error instanceof AuthenticationRequiredError
+    || (error instanceof HomeConnectError
+      && ([401, 403].includes(error.status)
+        || (error.operation === "token" && error.status === 400)))) {
+    return "authentication";
+  }
+  if (error instanceof HomeConnectError && error.offline) {
+    return "appliance_offline";
+  }
+  return "api";
+}
+
 export class AuthenticationRequiredError extends Error {
   constructor() {
     super("Je vyžadována autorizace Home Connect");
     this.name = "AuthenticationRequiredError";
   }
+}
+
+async function homeConnectResponseError(response, operation = "api") {
+  const text = await response.text();
+  let body;
+  try {
+    body = JSON.parse(text);
+  } catch {
+    // Non-JSON error pages are API failures, never appliance-offline evidence.
+  }
+  return new HomeConnectError(response.status, body?.error, operation, retryAfterMilliseconds(response));
+}
+
+function retryAfterMilliseconds(response) {
+  const value = response.headers.get("Retry-After");
+  if (!value) return 0;
+  const milliseconds = /^\d+$/.test(value)
+    ? Number(value) * 1000
+    : Date.parse(value) - Date.now();
+  return Number.isFinite(milliseconds) ? Math.min(2_147_483_647, Math.max(0, milliseconds)) : 0;
 }
 
 async function parseJsonResponse(response) {

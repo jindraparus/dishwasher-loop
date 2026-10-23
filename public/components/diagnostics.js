@@ -18,7 +18,8 @@ export function renderDiagnosticsCard(diagnostics) {
 
 function renderAppliance(diagnostic) {
   const details = [
-    ["Připojení", diagnostic.connected === false ? "Odpojeno" : "Připojeno"],
+    ["Připojení", diagnostic.connected === true ? "Připojeno"
+      : diagnostic.connected === false ? "Odpojeno" : "Neznámé"],
     ...diagnostic.statusItems.map((item) => [
       formatKey(item.key),
       formatValue(item.value, item.unit),
