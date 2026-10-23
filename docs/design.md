@@ -605,6 +605,39 @@ It then waits for `/healthz` to return the exact expected JSON response.
 Deployment concurrency is serialized and in-progress production deployments are
 not cancelled.
 
+Before uploading, the workflow captures all persisted cycles and weekly/monthly
+statistics using [`../scripts/check-deployment-history.js`](../scripts/check-deployment-history.js).
+After readiness (which follows startup cycle backfill), it verifies that every
+baseline cycle is still present and historical IDs, programs, boundaries,
+statuses, results, and exact duration seconds are preserved. Duplicate IDs or
+observations and unexpected historical additions also fail verification.
+
+Both comparisons use the baseline reference time and `CYCLE_TIMEZONE`, avoiding
+week/month rollover differences. New cycles observed since capture are allowed.
+Running and incomplete cycles may progress, acquire previously unknown start or
+program details, or finish with consistent boundaries and duration; known start
+and program details cannot change. Later terminal observations may advance a
+completed cycle's observation time but cannot alter its result or boundaries.
+Statistics are compared over the baseline population, substituting baseline
+values for these permitted live updates. Current statistics and activity counts
+are logged separately, so a wash finishing during deployment is not mistaken
+for lost history.
+
+The check reads production Table Storage without initializing or modifying it.
+It obtains only the storage connection string, table name, and cycle timezone
+from Web App settings using the existing OIDC deployment identity. Credentials
+stay in memory; the baseline contains cycle data only, is stored with restricted
+permissions in the runner's temporary directory, and is removed even on failure.
+No extra public API, authentication exemption, or Azure role is needed. An absent
+table is explicitly logged as an empty baseline before the very first deployment;
+an absent table after readiness is always an error.
+Other read errors or unexpected differences fail the workflow with a bounded diff;
+this does not automatically roll back an already deployed application.
+Intentional derivation changes must document and review the expected difference
+in the pull request, with corresponding guard/test changes rather than a
+generic bypass. The guard checks persisted derivation results, not changes to
+the statistics algorithm itself; focused statistics tests remain necessary.
+
 Infrastructure changes are applied separately through
 [`../infra/main.bicep`](../infra/main.bicep). The application workflow deploys
 runtime code only.

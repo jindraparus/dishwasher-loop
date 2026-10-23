@@ -42,6 +42,13 @@ jobs:
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
+      - name: Capture cycle history before deployment
+        timeout-minutes: 5
+        env:
+          AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+          AZURE_WEBAPP_NAME: ${{ vars.AZURE_WEBAPP_NAME }}
+        run: node scripts/check-deployment-history.js capture "$RUNNER_TEMP/cycle-history-before.json"
+
       - name: Record current deployment
         id: current-deployment
         shell: bash
@@ -120,6 +127,17 @@ jobs:
 
           echo "Application did not become healthy" >&2
           exit 1
+
+      - name: Verify cycle history after deployment
+        timeout-minutes: 5
+        env:
+          AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+          AZURE_WEBAPP_NAME: ${{ vars.AZURE_WEBAPP_NAME }}
+        run: node scripts/check-deployment-history.js verify "$RUNNER_TEMP/cycle-history-before.json"
+
+      - name: Remove cycle history baseline
+        if: always()
+        run: rm -f "$RUNNER_TEMP/cycle-history-before.json"
 
       - name: Sign out of Azure
         if: always()
