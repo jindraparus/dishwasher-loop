@@ -61,7 +61,8 @@ permissions:
 1. A pay-as-you-go Log Analytics workspace, with 30-day retention.
 2. A Web App diagnostic setting routing `AppServiceConsoleLogs` to its
    resource-specific table.
-3. An Action Group with the explicitly supplied email recipient.
+3. An Action Group with the explicitly supplied email recipient, or optionally
+   the existing subscription Owner role.
 4. A stateful scheduled query alert, disabled by default.
 
 Confirm the subscription/resource group, app, recipient, and monitoring costs
@@ -185,6 +186,31 @@ There is no application-side email retry queue. Delivery problems must be
 investigated in Azure Monitor rather than by changing Home Connect credentials.
 See [Action Groups notification requirements](https://learn.microsoft.com/en-us/azure/azure-monitor/alerts/action-groups)
 for the current verification rules.
+
+### Existing subscription Owner notification channel
+
+Azure also supports **Email Azure Resource Manager role** notifications. This
+uses the existing Entra/RBAC identity and does not require the new direct-email
+receiver OTP flow. It is a separate supported delivery mechanism, not a request
+to skip or bypass email verification.
+
+Before choosing it, inspect **all** direct and inherited subscription Owner
+assignments, including groups. Use it only when every resolved user is an
+intended recipient. Do not add role assignments, change identity email
+properties, or broaden access just to make notifications work. Future Owner
+membership changes also change the recipients.
+
+To configure this mode with Bicep, add `useOwnerRoleEmail=true` to the deployment
+command. `alertEmail` remains the direct-email-mode parameter but is not used
+for delivery in Owner mode. The template configures only one notification
+channel at a time, preventing duplicate direct/role emails. In the Portal,
+select **Email Azure Resource Manager role > Owner** instead of **Email**.
+Test delivery before enabling the alert; some identities require a configured
+Entra contact email, so do not assume this channel will work without testing.
+
+The current deployment uses Owner mode after verifying that the only Owner
+user is the existing app owner and Azure reports a successful email test.
+No RBAC assignments or identity contact properties were changed.
 
 ## Verification before closing the issue
 

@@ -8,7 +8,10 @@ param location string = resourceGroup().location
 @description('Email address to receive Azure Monitor fired and resolved notifications.')
 param alertEmail string
 
-@description('Enable only after console-log ingestion has been verified.')
+@description('Notify existing subscription Owners instead of alertEmail. Use only when every Owner is an intended recipient.')
+param useOwnerRoleEmail bool = false
+
+@description('Enable only after console-log ingestion and notification delivery have been verified.')
 param alertEnabled bool = false
 
 resource app 'Microsoft.Web/sites@2023-12-01' existing = {
@@ -49,13 +52,20 @@ resource email 'Microsoft.Insights/actionGroups@2023-01-01' = {
   properties: {
     groupShortName: 'Dishwasher'
     enabled: true
-    emailReceivers: [
+    emailReceivers: useOwnerRoleEmail ? [] : [
       {
         name: 'Dishwasher owner'
         emailAddress: alertEmail
         useCommonAlertSchema: true
       }
     ]
+    armRoleReceivers: useOwnerRoleEmail ? [
+      {
+        name: 'subscription-owner'
+        roleId: '8e3af657-a8ff-443c-a75c-2fe8c4bcb635'
+        useCommonAlertSchema: true
+      }
+    ] : []
   }
 }
 
