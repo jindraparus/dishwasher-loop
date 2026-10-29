@@ -576,7 +576,7 @@ function startEvidence(signals) {
   ].filter(Boolean);
 }
 
-function hasCompleteBoundaries(cycle) {
+export function hasCompleteBoundaries(cycle) {
   return Boolean(
     cycle.result === "finished"
     && cycle.startedAt

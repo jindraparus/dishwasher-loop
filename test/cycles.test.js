@@ -6,6 +6,7 @@ import {
   CycleTracker,
   parseCycleLimit,
 } from "../src/cycles.js";
+import { buildCycleSummary } from "../src/cycle-summary.js";
 
 test("reconstructs a normal cycle from strong observed boundaries", async () => {
   const storage = memoryStorage();
@@ -66,6 +67,8 @@ test("creates an incomplete-boundary completion when the start is missing", asyn
   assert.equal(storage.cycles[0].startedAt, null);
   assert.equal(storage.cycles[0].durationSeconds, null);
   assert.equal(storage.cycles[0].startConfidence, "missing");
+  assert.equal(buildCycleSummary(storage.cycles).completed, 1);
+  assert.equal(buildCycleSummary(storage.cycles).missingStartBoundaries, 1);
 });
 
 test("starts an inferred cycle when monitoring begins mid-cycle", async () => {
@@ -199,6 +202,7 @@ test("completes with lower confidence from two correlated terminal signals", asy
   assert.equal(storage.cycles[0].finishConfidence, "inferred");
   assert.equal(storage.cycles[0].durationSeconds, null);
   assert.deepEqual(storage.cycles[0].finishEvidence, ["correlated-terminal-signals"]);
+  assert.equal(buildCycleSummary(storage.cycles).inferredCompletions, 1);
 });
 
 test("ignores ProgramFinished Off and duplicate completion notifications", async () => {
@@ -223,6 +227,8 @@ test("ignores ProgramFinished Off and duplicate completion notifications", async
 
   assert.equal(tracker.cycles.size, 1);
   assert.equal(storage.cycles.length, 1);
+  assert.equal(buildCycleSummary(storage.cycles).totalObserved, 1);
+  assert.equal(buildCycleSummary(storage.cycles).completed, 1);
 });
 
 test("processes distinct events that reuse the Home Connect appliance id", async () => {
@@ -338,6 +344,8 @@ test("restores an open cycle and records a disconnect gap", async () => {
     endedAt: "2026-10-10T21:05:00.000Z",
   }]);
   assert.equal(storage.cycles[0].status, "finished");
+  assert.equal(buildCycleSummary(storage.cycles).totalObserved, 1);
+  assert.equal(buildCycleSummary(storage.cycles).cyclesWithObservationGaps, 1);
 });
 
 test("backfills ordered raw events idempotently", async () => {
@@ -371,6 +379,11 @@ test("backfills ordered raw events idempotently", async () => {
     "storage:event-1",
     "storage:event-2",
   ]);
+  const before = buildCycleSummary(storage.cycles);
+  await new CycleTracker(storage, { info() {} }).initialize();
+  const after = buildCycleSummary(storage.cycles);
+  assert.equal(after.totalObserved, 1);
+  assert.equal(after.completed, before.completed);
 });
 
 test("backfills events without storage ids using receipt-scoped identities", async () => {

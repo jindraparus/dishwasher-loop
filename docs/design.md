@@ -311,8 +311,12 @@ Tokens live only in the local MCP process and are not persisted. Restarting the
 MCP server signs the user out and requires browser authentication on the next
 live-data request. Bearer tokens, Easy Auth headers, cookies, Home Connect
 tokens, storage settings, and server internals are not included in MCP output.
-Only the existing sanitized overview and event projections are returned, with
-`source: "local"` or `source: "azure"` metadata.
+Only sanitized overview, event, and all-history cycle-summary projections are
+returned, with `source: "local"` or `source: "azure"` metadata.
+`get_dishwasher_cycle_summary` reads `/api/cycles/summary` directly, avoiding
+raw-event payloads. An optional appliance ID selects a single appliance;
+otherwise totals explicitly cover all listed appliances. Historical reads
+require service authorization, not a currently connected Home Connect session.
 
 In Azure mode, the local process does not instantiate the web service,
 `HomeConnectClient`, `DishwasherMonitor`, or storage. The deployed service
@@ -467,9 +471,26 @@ The authenticated APIs are:
 | `GET /api/cycles?limit=50` | Bounded recent cycle history, maximum 100 |
 | `GET /api/cycles/stats?period=week` | Weekly statistics |
 | `GET /api/cycles/stats?period=month` | Monthly statistics |
+| `GET /api/cycles/summary` | All persisted observed cycles, globally and per appliance |
 
 Statistics use `CYCLE_TIMEZONE` (`Europe/Prague` by default). Completed and
 incomplete counts remain separate, and averages include only known durations.
+
+The dashboard also includes `cycleSummary`, built from the same unbounded
+`listAllCycles()` projection as the summary endpoint. No new detector or stream
+is introduced. Summary validation rejects malformed records and inconsistent
+counts rather than fabricating empty history. Counting is a partition by status:
+`totalObserved = completed + running + incomplete`. Completed includes inferred
+finishes and missing-start completions; overlapping quality counters retain
+boundary uncertainty and observation gaps. Deterministic cycle IDs retain the
+existing duplicate/replay guarantees. Current diagnostics contribute known
+appliance identities with zero records; historical identities are retained.
+
+Summaries expose aggregation time and earliest/latest cycle observations.
+Monitoring start is unknown (`monitoringStartedAt: null`) and continuous
+coverage is not established (`continuousCoverageKnown: false`). Recorded totals
+are not lifetime usage, and persisted running status is not a live-state claim.
+See the [response contract and verification procedure](../README.md#observed-so-far-totals).
 
 ### 5.5 Disconnects and retries
 

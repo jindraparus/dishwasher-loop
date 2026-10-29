@@ -44,7 +44,7 @@ export function createDishwasherMcpServer({
 
   server.registerTool("list_dishwasher_events", {
     title: "List dishwasher events",
-    description: "List recent events from the selected Dishwasher Loop service.",
+    description: "List recent raw events, not washing-cycle totals. For observed so far or completed wash counts, use get_dishwasher_cycle_summary.",
     inputSchema: {
       limit: z.number().int().min(1).max(MAX_EVENT_LIMIT).default(20)
         .describe(`Maximum number of events to return, up to ${MAX_EVENT_LIMIT}.`),
@@ -60,6 +60,25 @@ export function createDishwasherMcpServer({
       source: dashboardClient.source,
       events: buildDishwasherEvents(dashboard, limit),
       limit,
+    };
+  }));
+
+  server.registerTool("get_dishwasher_cycle_summary", {
+    title: "Get observed dishwasher cycle totals",
+    description: "Answer how many washing cycles have been observed so far from all persisted cycle history, not recent events or capsule inventory. Returns total observed, completed (including inferred finishes), running and incomplete counts, boundary uncertainty, observation gaps and appliance scope. Recorded history is not lifetime usage or proof of continuous monitoring.",
+    inputSchema: {
+      applianceId: z.string().trim().min(1).optional()
+        .describe("Appliance ID from the overview or summary. Omit for explicitly aggregated totals across all recorded appliances."),
+    },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      openWorldHint: false,
+    },
+  }, ({ applianceId }) => handleTool(async () => {
+    return {
+      source: dashboardClient.source,
+      ...await dashboardClient.getCycleSummary(applianceId),
     };
   }));
 
