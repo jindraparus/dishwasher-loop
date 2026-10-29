@@ -4,6 +4,7 @@ import {
   adjustedRemainingSeconds,
   isProgramActive,
 } from "../../public/lib/program.js";
+import { selectCycleSummary } from "../cycle-summary.js";
 
 const LOCAL_TIMEOUT_MS = 5_000;
 const AZURE_TIMEOUT_MS = 30_000;
@@ -21,6 +22,7 @@ export class DashboardClient {
     }
     this.source = target;
     this.dashboardUrl = new URL("/api/dashboard", normalizeBaseUrl(baseUrl, target));
+    this.cycleSummaryUrl = new URL("/api/cycles/summary", this.dashboardUrl);
     if (target === "azure" && !tokenProvider) {
       throw new Error("Azure dashboard access requires a token provider.");
     }
@@ -30,6 +32,22 @@ export class DashboardClient {
   }
 
   async getDashboard() {
+    const dashboard = await this.getJson(this.dashboardUrl);
+    validateDashboard(dashboard);
+    if (!dashboard.authorized) {
+      throw new Error(
+        `Home Connect is not authorized. Open the ${this.source} Dishwasher Loop dashboard `
+        + "and complete the Home Connect connection first.",
+      );
+    }
+    return dashboard;
+  }
+
+  async getCycleSummary(applianceId) {
+    return selectCycleSummary(await this.getJson(this.cycleSummaryUrl), applianceId);
+  }
+
+  async getJson(url) {
     const headers = { Accept: "application/json" };
     if (this.source === "azure") {
       headers.Authorization = `Bearer ${await this.tokenProvider.getAccessToken()}`;
@@ -37,14 +55,14 @@ export class DashboardClient {
 
     let response;
     try {
-      response = await this.fetchImplementation(this.dashboardUrl, {
+      response = await this.fetchImplementation(url, {
         headers,
         redirect: "manual",
         signal: AbortSignal.timeout(this.timeoutMs),
       });
     } catch (error) {
       throw new Error(
-        `Unable to reach Dishwasher Loop at ${this.dashboardUrl.origin}. `
+        `Unable to reach Dishwasher Loop at ${url.origin}. `
         + (this.source === "local"
           ? "Start the local service with npm start and try again."
           : "Check the Azure base URL, network connection, and App Service status."),
@@ -93,13 +111,6 @@ export class DashboardClient {
       dashboard = await response.json();
     } catch (error) {
       throw new Error("Dishwasher Loop returned malformed JSON.", { cause: error });
-    }
-    validateDashboard(dashboard);
-    if (!dashboard.authorized) {
-      throw new Error(
-        `Home Connect is not authorized. Open the ${this.source} Dishwasher Loop dashboard `
-        + "and complete the Home Connect connection first.",
-      );
     }
     return dashboard;
   }

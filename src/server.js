@@ -13,6 +13,7 @@ import { requireAllowedMicrosoftUser } from "./microsoft-auth.js";
 import { DishwasherMonitor } from "./monitor.js";
 import { Storage } from "./storage.js";
 import { capsuleSettingsRouter } from "./supplies.js";
+import { buildCycleSummary } from "./cycle-summary.js";
 
 const config = loadConfig();
 const indexPath = fileURLToPath(new URL("../public/index.html", import.meta.url));
@@ -61,6 +62,7 @@ app.get("/api/dashboard", async (request, response, next) => {
         week: buildCycleStats(allCycles, "week", config.cycleTimezone),
         month: buildCycleStats(allCycles, "month", config.cycleTimezone),
       },
+      cycleSummary: buildCycleSummary(allCycles, monitor.getDiagnostics()),
     });
   } catch (error) {
     next(error);
@@ -92,6 +94,14 @@ app.get("/api/cycles/stats", async (request, response, next) => {
       period,
       config.cycleTimezone,
     ));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/cycles/summary", async (request, response, next) => {
+  try {
+    response.json(buildCycleSummary(await storage.listAllCycles(), monitor.getDiagnostics()));
   } catch (error) {
     next(error);
   }
@@ -164,7 +174,7 @@ app.use((error, request, response, next) => {
 });
 
 const server = app.listen(config.port, () => {
-  console.log(`Dishwasher Loop listening on port ${config.port}`);
+  console.log(`Dishwasher Loop listening on port ${server.address().port}`);
 });
 
 function shutdown() {

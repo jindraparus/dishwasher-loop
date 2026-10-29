@@ -152,6 +152,14 @@ test("round-trips cycle entities through the Azure Table representation", () => 
   }), cycle);
 });
 
+test("malformed Azure cycle details cannot erase observation uncertainty", () => {
+  for (const details of ["not JSON", "null", "[]", "{}", '{"observationGaps":null}']) {
+    assert.throws(() => entityToCycle({
+      rowKey: "cycle-1", details,
+    }), /Invalid persisted cycle details/);
+  }
+});
+
 test("connectivity state and outage identity survive local storage reloads", async () => {
   const directory = await mkdtemp(path.join(tmpdir(), "dishwasher-connectivity-"));
   const file = path.join(directory, "storage.json");

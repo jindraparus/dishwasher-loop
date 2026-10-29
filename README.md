@@ -501,11 +501,113 @@ Authenticated cycle APIs:
 GET /api/cycles?limit=50
 GET /api/cycles/stats?period=week
 GET /api/cycles/stats?period=month
+GET /api/cycles/summary
 ```
 
 Limits must be between 1 and 100. Statistics report completed and incomplete
 records separately and calculate durations only from cycles with trustworthy
 start and finish boundaries.
+
+### Observed-so-far totals
+
+`GET /api/cycles/summary` aggregates **all persisted cycle records**, without
+the dashboard's 20-cycle, cycle API's 100-cycle, or event-list limits.
+The same object appears as `cycleSummary` in `/api/dashboard`. Both endpoints
+use the existing Microsoft authentication and allowlist.
+
+The read-only MCP tool `get_dishwasher_cycle_summary` reads the summary endpoint
+on the selected `local` or `azure` service and adds `source`. It does not fetch
+raw events or infer usage from capsule stock. Optional `applianceId` selects
+one appliance; omitting it explicitly aggregates all listed appliances,
+including historical appliances no longer discovered. Unknown IDs are errors.
+Known appliances with no records have zero counts. Historical access does not
+require an active Home Connect authorization, but still requires service access.
+
+Example MCP response for one recorded appliance:
+
+```json
+{
+  "source": "azure",
+  "scope": "persisted-cycle-history",
+  "summarizedAt": "2026-10-29T20:00:00.000Z",
+  "monitoringStartedAt": null,
+  "continuousCoverageKnown": false,
+  "totalObserved": 7,
+  "completed": 4,
+  "running": 1,
+  "incomplete": 2,
+  "inferredCompletions": 1,
+  "completeBoundaries": 2,
+  "missingStartBoundaries": 1,
+  "missingFinishBoundaries": 3,
+  "cyclesWithObservationGaps": 1,
+  "earliestObservedAt": "2026-10-10T19:00:00.000Z",
+  "latestObservedAt": "2026-10-28T22:00:00.000Z",
+  "appliances": [{
+    "applianceId": "dishwasher-1",
+    "applianceName": "Kitchen dishwasher",
+    "totalObserved": 7,
+    "completed": 4,
+    "running": 1,
+    "incomplete": 2,
+    "inferredCompletions": 1,
+    "completeBoundaries": 2,
+    "missingStartBoundaries": 1,
+    "missingFinishBoundaries": 3,
+    "cyclesWithObservationGaps": 1,
+    "earliestObservedAt": "2026-10-10T19:00:00.000Z",
+    "latestObservedAt": "2026-10-28T22:00:00.000Z"
+  }]
+}
+```
+
+Counting rules:
+
+- `totalObserved = completed + running + incomplete`, globally and per appliance.
+  Each persisted cycle identity contributes once; event duplicates, reconnects,
+  and idempotent restart/backfill do not create an additional counting mechanism.
+- `completed` means `status: "finished"` / `result: "finished"`, including
+  inferred finishes and finish-only records with a missing start.
+  `inferredCompletions` is a subset, not an additional count.
+- `running` and `incomplete` use the persisted projection statuses.
+  Running history is not proof of current operation. Incomplete includes
+  unknown outcomes and superseded cycles, not finished cycles with missing starts.
+- `completeBoundaries` uses the existing statistics rule: both boundaries
+  observed and duration known. `missingStartBoundaries` counts null starts,
+  including mid-cycle observations; `missingFinishBoundaries` counts null finishes.
+  `cyclesWithObservationGaps` counts records with at least one recorded
+  disconnect interval (open or closed). These quality counts overlap.
+- Earliest/latest timestamps are the minimum `firstObservedAt` and maximum
+  `lastObservedAt` of recorded cycles, not monitoring start/end or continuous
+  coverage. Empty history returns zero counts and null observation timestamps.
+  Monitoring start is unknown; washes missed while no monitor was connected
+  cannot be recovered. An empty appliance list means no appliance identities
+  are currently known, not proof that no dishwasher exists.
+- Storage, malformed data, and service/authentication failures are errors,
+  never zero counts or fallback to another target. Older services without this
+  summary endpoint must be deployed before the new MCP tool can work.
+  `summarizedAt` marks aggregation time; it does not assert live connectivity.
+
+Example answer: "Azure recorded history contains **7 observed cycles** for
+Kitchen dishwasher: **4 completed** (1 inferred finish), **1 marked running**,
+and **2 incomplete**, as of 29 October 2026 20:00 UTC. Cycle observations span
+10–28 October; one start and three finishes are missing, and one record has
+an observation gap. This is recorded history, not lifetime usage or proof
+of continuous monitoring."
+
+After review, merge, and deployment, verify the original question end-to-end:
+
+1. Select the Azure target and restart the MCP server to discover the new tool.
+2. Ask the Advisor "How many washing cycles have been observed so far?"
+   Confirm it calls `get_dishwasher_cycle_summary`, uses the selected appliance
+   (or explicitly all listed appliances), and reports the breakdown and limits.
+3. Reconcile the MCP structured result with the authenticated
+   `/api/cycles/summary` response for the same appliance and snapshot. For a
+   deterministic check, replay that captured API JSON through the MCP client's
+   fetch transport; independent live requests can differ as cycles progress.
+4. If comparing two live reads, record both `summarizedAt` values and repeat
+   during a stable period if history changed. Do not equate different snapshots
+   or treat `/healthz` alone as cycle-history readiness.
 
 ## Copilot dishwasher agent
 
@@ -641,6 +743,7 @@ Example questions:
 - Is the dishwasher running, and when should it finish?
 - Which supplies need attention?
 - What happened during the latest cycle?
+- How many washing cycles have been observed so far, and how many completed?
 - According to the manual, how should I clean the filter?
 - What does the current status mean, and what should I do next?
 

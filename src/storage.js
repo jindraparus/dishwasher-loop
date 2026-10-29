@@ -26,7 +26,10 @@ export class Storage {
       try {
         this.localData = JSON.parse(await readFile(this.localFile, "utf8"));
         this.localData.events ||= [];
-        this.localData.cycles ||= [];
+        if (this.localData.cycles === undefined) this.localData.cycles = [];
+        if (!Array.isArray(this.localData.cycles)) {
+          throw new Error("Invalid persisted cycle history: cycles must be an array.");
+        }
         this.localData.tokens ??= null;
       } catch (error) {
         if (error.code !== "ENOENT") {
@@ -393,7 +396,11 @@ export function cycleToEntity(cycle) {
 }
 
 export function entityToCycle(entity) {
-  const details = parsePayload(entity.details) || {};
+  const details = parsePayload(entity.details);
+  if (!details || typeof details !== "object" || Array.isArray(details)
+    || !Array.isArray(details.observationGaps)) {
+    throw new Error(`Invalid persisted cycle details for ${entity.rowKey}. Check cycle storage.`);
+  }
   return {
     cycleId: entity.rowKey,
     applianceId: entity.applianceId,
@@ -412,7 +419,7 @@ export function entityToCycle(entity) {
     finishConfidence: entity.finishConfidence,
     startEvidence: details.startEvidence || [],
     finishEvidence: details.finishEvidence || [],
-    observationGaps: details.observationGaps || [],
+    observationGaps: details.observationGaps,
     sourceEventIds: details.sourceEventIds || [],
     progressMin: details.progressMin ?? null,
     progressMax: details.progressMax ?? null,
