@@ -502,11 +502,52 @@ GET /api/cycles?limit=50
 GET /api/cycles/stats?period=week
 GET /api/cycles/stats?period=month
 GET /api/cycles/summary
+GET /api/cycles/analytics?period=all
+GET /api/cycles/analytics?period=this-week&timeZone=Europe%2FPrague
+GET /api/cycles/analytics?period=range&from=2026-10-25T23:00:00Z&to=2026-10-29T20:46:00Z
 ```
 
 Limits must be between 1 and 100. Statistics report completed and incomplete
 records separately and calculate durations only from cycles with trustworthy
 start and finish boundaries.
+
+### Program popularity and weekly cycle counts
+
+The read-only MCP tool `get_dishwasher_cycle_analytics` reads the authenticated
+`/api/cycles/analytics` endpoint on the selected local or Azure service.
+Deploy that endpoint and restart the MCP server to discover the new tool.
+Optional `applianceId` selects one appliance, including historical appliances;
+omitting it aggregates all listed appliances. Unknown IDs are errors, while
+known appliances with no records have zero counts.
+
+- `period: "all"` (default) ranks programs across all persisted cycle history.
+- `period: "this-week"` counts Monday at local midnight through the query time.
+  `timeZone` defaults to the service's `CYCLE_TIMEZONE` (normally Europe/Prague).
+  Boundaries use timezone rules, including daylight-saving changes.
+- `period: "range"` requires both `from` and `to` with explicit UTC offsets.
+  The interval is inclusive at `from`, exclusive at `to`; omit these arguments
+  for other periods. Returned boundaries are normalized to UTC.
+
+The population is **all observed cycles, including incomplete records**.
+Membership uses `startedAt`, falling back to `firstObservedAt` for missing starts;
+`missingStartFallbackCount` exposes that uncertainty. A cycle starting before
+the range and finishing inside it is excluded; one starting inside and finishing
+after it is included. These are start-based usage counts, **not completion-date
+statistics** (the older dashboard `/api/cycles/stats` uses completion dates).
+
+`summary` contains interval observed/completed/running/incomplete counts,
+inferred completions, missing boundaries, observation gaps and appliance scope.
+`history` describes the full recorded coverage for that same appliance scope.
+`programs` contains descending usage counts, program keys and formatted names;
+unknown keys remain a null bucket. `mostUsedPrograms` includes every tied leader,
+including null if unknown usage leads or ties. Never claim a definitive named
+winner when unknown records could change the ranking.
+
+MCP adds `source`; results include `summarizedAt`, interval/timezone, population
+and counting basis. Coverage is not lifetime usage or guaranteed continuous
+monitoring. Empty history/ranges return genuine zero counts and no winner;
+invalid options, unavailable endpoints, malformed history or responses are errors,
+never zero-count fallbacks.
 
 ### Observed-so-far totals
 

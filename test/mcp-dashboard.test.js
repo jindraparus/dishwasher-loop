@@ -215,6 +215,7 @@ test("MCP server exposes bounded read-only tools and actionable errors", async (
     ]);
     const tools = await client.listTools();
     assert.deepEqual(tools.tools.map((tool) => tool.name).sort(), [
+      "get_dishwasher_cycle_analytics",
       "get_dishwasher_cycle_summary",
       "get_dishwasher_overview",
       "list_dishwasher_events",

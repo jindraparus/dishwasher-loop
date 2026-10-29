@@ -14,6 +14,7 @@ import { DishwasherMonitor } from "./monitor.js";
 import { Storage } from "./storage.js";
 import { capsuleSettingsRouter } from "./supplies.js";
 import { buildCycleSummary } from "./cycle-summary.js";
+import { buildCycleAnalytics, CycleAnalyticsInputError, parseCycleAnalyticsOptions } from "./cycle-analytics.js";
 
 const config = loadConfig();
 const indexPath = fileURLToPath(new URL("../public/index.html", import.meta.url));
@@ -103,6 +104,21 @@ app.get("/api/cycles/summary", async (request, response, next) => {
   try {
     response.json(buildCycleSummary(await storage.listAllCycles(), monitor.getDiagnostics()));
   } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/cycles/analytics", async (request, response, next) => {
+  try {
+    const options = parseCycleAnalyticsOptions(request.query);
+    response.json(buildCycleAnalytics(
+      await storage.listAllCycles(), monitor.getDiagnostics(), options, new Date(), config.cycleTimezone,
+    ));
+  } catch (error) {
+    if (error instanceof CycleAnalyticsInputError) {
+      response.status(400).json({ error: error.message });
+      return;
+    }
     next(error);
   }
 });

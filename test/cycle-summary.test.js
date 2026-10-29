@@ -190,6 +190,28 @@ test("authenticated summary API uses all durable records and dashboard shares th
   assert.equal(dashboard.cycles.length, 20);
   assert.equal(dashboard.cycleSummary.totalObserved, summary.totalObserved);
   assert.equal(dashboard.cycleSummary.incomplete, 2);
+  assert.equal((await fetch(`${base}/api/cycles/analytics`)).status, 401);
+  assert.equal((await fetch(`${base}/api/cycles/analytics`, {
+    headers: { "x-ms-client-principal-id": "not-allowed" },
+  })).status, 403);
+  const analyticsResponse = await fetch(`${base}/api/cycles/analytics?applianceId=dishwasher-1`, { headers });
+  assert.equal(analyticsResponse.status, 200);
+  const analytics = await analyticsResponse.json();
+  assert.equal(analytics.summary.totalObserved, 117);
+  assert.equal(analytics.history.totalObserved, 117);
+  assert.deepEqual(analytics.programs, [{ programKey: null, programName: null, count: 117 }]);
+  const range = await fetch(`${base}/api/cycles/analytics?period=range&from=2026-10-01T00:00:00Z&to=2026-10-11T00:00:00Z&timeZone=UTC`, { headers });
+  assert.equal(range.status, 200);
+  assert.equal((await range.json()).summary.totalObserved, 117);
+  const weekly = await fetch(`${base}/api/cycles/analytics?period=this-week&timeZone=Europe%2FPrague`, { headers });
+  assert.equal(weekly.status, 200);
+  assert.equal((await weekly.json()).interval.period, "this-week");
+  for (const query of ["period=range", "timeZone=invalid", "period=all&from=invalid",
+    "applianceId=a&applianceId=b"]) {
+    const invalid = await fetch(`${base}/api/cycles/analytics?${query}`, { headers });
+    assert.equal(invalid.status, 400);
+    assert.ok((await invalid.json()).error);
+  }
   const recent = await (await fetch(`${base}/api/cycles?limit=100`, { headers })).json();
   assert.equal(recent.cycles.length, 100);
   const dashboardClient = new DashboardClient({
@@ -221,12 +243,18 @@ test("summary API distinguishes true empty history from malformed persisted reco
   const empty = await fetch(`${emptyBase}/api/cycles/summary`, { headers });
   assert.equal(empty.status, 200);
   assert.equal((await empty.json()).totalObserved, 0);
+  const emptyAnalytics = await fetch(`${emptyBase}/api/cycles/analytics`, { headers });
+  assert.equal(emptyAnalytics.status, 200);
+  assert.equal((await emptyAnalytics.json()).summary.totalObserved, 0);
   const invalidBase = await startApi(t, [cycle(1, { status: "invalid" })]);
   const invalid = await fetch(`${invalidBase}/api/cycles/summary`, { headers });
   assert.equal(invalid.status, 500);
   const error = await invalid.json();
   assert.ok(error.error);
   assert.equal(error.totalObserved, undefined);
+  const invalidAnalytics = await fetch(`${invalidBase}/api/cycles/analytics`, { headers });
+  assert.equal(invalidAnalytics.status, 500);
+  assert.ok((await invalidAnalytics.json()).error);
 });
 
 test("MCP returns compact structured selected-source summaries and actionable failures", async () => {

@@ -5,6 +5,7 @@ import {
   isProgramActive,
 } from "../../public/lib/program.js";
 import { selectCycleSummary } from "../cycle-summary.js";
+import { parseCycleAnalyticsOptions, validateCycleAnalytics } from "../cycle-analytics.js";
 
 const LOCAL_TIMEOUT_MS = 5_000;
 const AZURE_TIMEOUT_MS = 30_000;
@@ -45,6 +46,26 @@ export class DashboardClient {
 
   async getCycleSummary(applianceId) {
     return selectCycleSummary(await this.getJson(this.cycleSummaryUrl), applianceId);
+  }
+
+  async getCycleAnalytics(options = {}) {
+    const input = parseCycleAnalyticsOptions(options);
+    const url = new URL("/api/cycles/analytics", this.dashboardUrl);
+    for (const [key, value] of Object.entries(input)) {
+      if (value !== undefined) url.searchParams.set(key, value);
+    }
+    const result = validateCycleAnalytics(await this.getJson(url));
+    if (result.interval.period !== input.period
+      || (input.timeZone !== undefined && result.interval.timeZone !== input.timeZone)
+      || (input.period === "range"
+        && (result.interval.from !== new Date(input.from).toISOString()
+          || result.interval.to !== new Date(input.to).toISOString()))
+      || (input.applianceId !== undefined
+        && (result.history.appliances.length !== 1
+          || result.history.appliances[0].applianceId !== input.applianceId))) {
+      throw new Error("Dishwasher Loop returned cycle analytics for a different scope or interval.");
+    }
+    return result;
   }
 
   async getJson(url) {

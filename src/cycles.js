@@ -315,6 +315,18 @@ export async function backfillCycleHistory(storage, logger = console, options = 
 }
 
 export function buildCycleStats(cycles, period, timezone, now = new Date()) {
+  const { periodStart: startKey, periodEnd: endKey } = cyclePeriodDates(period, timezone, now);
+  const periodCycles = cycles.filter((cycle) => {
+    if (!cycle.finishedAt || cycle.result !== "finished") {
+      return false;
+    }
+    const key = dateKey(localDateParts(new Date(cycle.finishedAt), timezone));
+    return key >= startKey && key <= endKey;
+  });
+  return summarizePeriodCycles(cycles, periodCycles, period, timezone, startKey, endKey);
+}
+
+export function cyclePeriodDates(period, timezone, now = new Date()) {
   if (!["week", "month"].includes(period)) {
     throw new Error("Period must be week or month.");
   }
@@ -328,13 +340,10 @@ export function buildCycleStats(cycles, period, timezone, now = new Date()) {
     : addUtcDays(start, 6);
   const startKey = dateKey(start);
   const endKey = dateKey(end);
-  const periodCycles = cycles.filter((cycle) => {
-    if (!cycle.finishedAt || cycle.result !== "finished") {
-      return false;
-    }
-    const key = dateKey(localDateParts(new Date(cycle.finishedAt), timezone));
-    return key >= startKey && key <= endKey;
-  });
+  return { periodStart: startKey, periodEnd: endKey };
+}
+
+function summarizePeriodCycles(cycles, periodCycles, period, timezone, startKey, endKey) {
   const knownDurations = periodCycles
     .map((cycle) => cycle.durationSeconds)
     .filter(Number.isFinite);

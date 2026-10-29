@@ -311,12 +311,28 @@ Tokens live only in the local MCP process and are not persisted. Restarting the
 MCP server signs the user out and requires browser authentication on the next
 live-data request. Bearer tokens, Easy Auth headers, cookies, Home Connect
 tokens, storage settings, and server internals are not included in MCP output.
-Only sanitized overview, event, and all-history cycle-summary projections are
+Only sanitized overview, event, cycle-summary and cycle-analytics projections are
 returned, with `source: "local"` or `source: "azure"` metadata.
 `get_dishwasher_cycle_summary` reads `/api/cycles/summary` directly, avoiding
 raw-event payloads. An optional appliance ID selects a single appliance;
 otherwise totals explicitly cover all listed appliances. Historical reads
 require service authorization, not a currently connected Home Connect session.
+
+`get_dishwasher_cycle_analytics` reads `/api/cycles/analytics` for program
+popularity and weekly/custom date-range counts. It uses all durable records,
+optionally scoped by appliance. Its `summary` is interval-specific; `history`
+preserves full-scope recorded coverage and uncertainty. Both use the existing
+validated cycle-summary contract. Program counts include incomplete records,
+retain unknown keys as null, and return all ties. Missing or invalid analytics
+fail explicitly rather than substituting dashboard statistics or recent events.
+
+Range membership uses the observed start or, explicitly counted as uncertain,
+the first observation when the start is missing. Ranges are [from, to), with
+offset-bearing input timestamps. This differs intentionally from the existing
+completion-date dashboard statistics. This-week ranges begin Monday locally
+using shared period-date logic and end at query time; timezone rules determine
+the UTC boundary, with `CYCLE_TIMEZONE` as the default. The API validates options
+and the MCP validates returned analytics and their requested scope/interval.
 
 In Azure mode, the local process does not instantiate the web service,
 `HomeConnectClient`, `DishwasherMonitor`, or storage. The deployed service

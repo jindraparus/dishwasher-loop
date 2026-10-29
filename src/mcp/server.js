@@ -11,6 +11,7 @@ import {
 import { AzureTokenProvider } from "./azure-auth.js";
 import { loadMcpConfig } from "./config.js";
 import { DishwasherDocuments } from "./documents.js";
+import { cycleAnalyticsInput } from "../cycle-analytics.js";
 
 const MAX_EVENT_LIMIT = 50;
 
@@ -65,7 +66,7 @@ export function createDishwasherMcpServer({
 
   server.registerTool("get_dishwasher_cycle_summary", {
     title: "Get observed dishwasher cycle totals",
-    description: "Answer how many washing cycles have been observed so far from all persisted cycle history, not recent events or capsule inventory. Returns total observed, completed (including inferred finishes), running and incomplete counts, boundary uncertainty, observation gaps and appliance scope. Recorded history is not lifetime usage or proof of continuous monitoring.",
+    description: "Answer how many washing cycles have been observed so far from all persisted cycle history, not recent events or capsule inventory. Returns total observed, completed (including inferred finishes), running and incomplete counts, boundary uncertainty, observation gaps and appliance scope. For program popularity or weekly/date-range counts use get_dishwasher_cycle_analytics. Recorded history is not lifetime usage or proof of continuous monitoring.",
     inputSchema: {
       applianceId: z.string().trim().min(1).optional()
         .describe("Appliance ID from the overview or summary. Omit for explicitly aggregated totals across all recorded appliances."),
@@ -81,6 +82,20 @@ export function createDishwasherMcpServer({
       ...await dashboardClient.getCycleSummary(applianceId),
     };
   }));
+
+  server.registerTool("get_dishwasher_cycle_analytics", {
+    title: "Get dishwasher program usage and date-range cycle counts",
+    description: "Answer most-used washing program and this-week or date-range cycle-count questions from persisted history. Counts all observed records, including incomplete ones, by startedAt with explicit firstObservedAt fallback for missing starts. Returns program counts, all ties (null means unknown), interval, appliance scope, full-history coverage and uncertainty. This week is Monday to now in the service timezone unless overridden. Not lifetime usage or proof of continuous monitoring.",
+    inputSchema: cycleAnalyticsInput,
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      openWorldHint: false,
+    },
+  }, (options) => handleTool(async () => ({
+    source: dashboardClient.source,
+    ...await dashboardClient.getCycleAnalytics(options),
+  })));
 
   server.registerTool("search_dishwasher_documentation", {
     title: "Search dishwasher documentation",

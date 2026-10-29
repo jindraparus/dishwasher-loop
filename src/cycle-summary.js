@@ -54,6 +54,7 @@ const cycleSchema = z.object({
   applianceId: z.string().min(1),
   applianceName: z.string(),
   status: z.enum(["finished", "running", "incomplete"]),
+  programKey: z.string().trim().nullable().optional(),
   result: z.enum(["finished", "unknown", "superseded"]),
   firstObservedAt: timestamp,
   lastObservedAt: timestamp,
@@ -77,17 +78,22 @@ const cycleSchema = z.object({
     ? cycle.startedAt !== null
     : cycle.startedAt === null), "Inconsistent cycle state or boundaries.");
 
-export function buildCycleSummary(cycles, appliances = [], now = new Date()) {
+export function parseCycleHistory(cycles) {
   const parsed = z.array(cycleSchema).safeParse(cycles);
   if (!parsed.success
     || new Set(parsed.data.map((cycle) => cycle.cycleId)).size !== parsed.data.length) {
     throw new Error("Invalid persisted cycle history. Check service logs and cycle storage.");
   }
+  return parsed.data;
+}
+
+export function buildCycleSummary(cycles, appliances = [], now = new Date()) {
+  const history = parseCycleHistory(cycles);
   const summaries = new Map(appliances.map((appliance) => [
     appliance.id,
     { applianceId: appliance.id, applianceName: appliance.name, ...emptyCounts() },
   ]));
-  for (const cycle of parsed.data) {
+  for (const cycle of history) {
     if (!summaries.has(cycle.applianceId)) {
       summaries.set(cycle.applianceId, {
         applianceId: cycle.applianceId,
