@@ -511,6 +511,42 @@ Limits must be between 1 and 100. Statistics report completed and incomplete
 records separately and calculate durations only from cycles with trustworthy
 start and finish boundaries.
 
+### Usage-based tablet supply recommendations
+
+The dashboard API includes a backend-computed `supplyForecast`. The existing
+`get_dishwasher_overview` MCP tool exposes it under
+`supplies.dishwasherCapsules.forecast` and returns the same supply recommendations
+as the dashboard. The advisor includes relevant ordering advice in routine
+status answers. This is read-only advice, not a purchase or scheduled reminder.
+Deploy the updated service and restart MCP to use the forecast.
+
+Fixed policy (no new configuration):
+
+- Use a rolling 28 elapsed-day window, shortened to the earliest available
+  recorded observation. Require at least 7 days and 3 completed cycles.
+- Count completed cycles by `finishedAt` in [from, to), including inferred
+  completions. One tablet per completed cycle, regardless of program, matches
+  existing inventory accounting; it is an assumption, not measured consumption.
+- Inventory is shared across all recorded/discovered appliances. The forecast
+  aggregates their usage, including historical appliances.
+- Estimate tablets/day = completed cycles / elapsed observed days, then
+  days remaining = current stock / tablets per day.
+- Recommend ordering at **7 days remaining or less**: 3-day delivery plus a
+  4-day safety buffer. Zero stock always recommends replenishment.
+- Without a usable estimate, retain the **5-tablet-or-fewer** stock-only warning,
+  explicitly labelled as such. With a usable estimate, it replaces the fixed
+  threshold, so low-count but slow consumption need not trigger ordering.
+
+The forecast returns policy, timestamp, counting basis, inventory, full-history
+coverage, window counts, rate, days remaining, action and reason. Unknown
+continuous monitoring is always flagged; inferred completions, unfinished
+records and observation gaps add uncertainty. Missing/invalid inventory,
+insufficient evidence and zero observed recent usage do not produce a depletion
+date or imply zero actual usage. Malformed history/forecast data is an error.
+Older service responses without a forecast explicitly show estimate-unavailable
+or stock-only advice. Saving new inventory discards the previous forecast and
+refreshes it; stale advice must not carry over after replenishment.
+
 ### Program popularity and weekly cycle counts
 
 The read-only MCP tool `get_dishwasher_cycle_analytics` reads the authenticated

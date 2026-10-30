@@ -55,10 +55,11 @@ capsuleForm.addEventListener("submit", async (event) => {
     // Finish any older refresh before applying the newly saved count.
     await refreshPromise;
     const { capsuleCount } = await saveCapsuleCount(Number(capsuleInput.value));
-    dashboardState = { ...dashboardState, capsuleCount };
+    dashboardState = { ...dashboardState, capsuleCount, supplyForecast: undefined };
     app.innerHTML = renderDashboard(dashboardState);
     dialog.close();
     document.querySelector("#settings-status").textContent = "Počet tablet byl uložen.";
+    await refreshDashboard();
   } catch (error) {
     capsuleError.textContent = error.message;
     capsuleError.hidden = false;

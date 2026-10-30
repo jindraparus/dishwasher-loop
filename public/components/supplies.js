@@ -1,13 +1,12 @@
 import { escapeHtml } from "../lib/format.js";
+import { capsuleState as supplyState } from "../lib/supply.js";
 
-export function renderSuppliesCard(diagnostics, capsuleCount) {
+export function renderSuppliesCard(diagnostics, capsuleCount, forecast) {
   const diagnostic = diagnostics[0];
   const salt = diagnostic?.consumables?.salt
     || { state: "unknown", label: "Čeká se na spotřebič" };
   const capsuleLabel = Number.isInteger(capsuleCount) ? capsuleCount : "Není k dispozici";
-  const capsuleState = !Number.isInteger(capsuleCount)
-    ? "unknown"
-    : capsuleCount <= 5 ? "low" : "ok";
+  const capsuleState = supplyState(capsuleCount, forecast);
 
   return `<section class="card supplies-card">
     <div class="card-heading"><h2>Zásoby</h2><span class="icon" aria-hidden="true">◇</span></div>

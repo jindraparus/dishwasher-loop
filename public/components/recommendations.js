@@ -1,5 +1,6 @@
 import { escapeHtml } from "../lib/format.js";
 import { isProgramActive } from "../lib/program.js";
+import { capsuleRecommendation } from "../lib/supply.js";
 
 export function renderRecommendationsCard(state, now = Date.now()) {
   const recommendations = buildRecommendations(state, now);
@@ -9,22 +10,23 @@ export function renderRecommendationsCard(state, now = Date.now()) {
   </section>`;
 }
 
-export function buildRecommendations({ authorized, diagnostics, capsuleCount }, now = Date.now()) {
+export function buildRecommendations({ authorized, diagnostics, capsuleCount, supplyForecast }, now = Date.now()) {
   const recommendations = [];
+  const supply = capsuleRecommendation(capsuleCount, supplyForecast);
   const diagnostic = diagnostics[0];
   if (!authorized) {
     return [{
       title: "Připojte Home Connect",
       text: "Pro zahájení sledování autorizujte účet spotřebiče.",
       tone: "warning",
-    }];
+    }, ...(supply ? [supply] : [])];
   }
   if (!diagnostic) {
     return [{
       title: "Čeká se na myčku",
       text: "Diagnostika spárované myčky zatím není k dispozici.",
       tone: "warning",
-    }];
+    }, ...(supply ? [supply] : [])];
   }
   if (diagnostic.connected === false) {
     recommendations.push({
@@ -53,19 +55,7 @@ export function buildRecommendations({ authorized, diagnostics, capsuleCount }, 
       tone: "warning",
     });
   }
-  if (!Number.isInteger(capsuleCount)) {
-    recommendations.push({
-      title: "Počet tablet není k dispozici",
-      text: "V úložišti není k dispozici platný počet tablet do myčky.",
-      tone: "",
-    });
-  } else if (capsuleCount <= 5) {
-    recommendations.push({
-      title: "Doplňte tablety do myčky",
-      text: `Zbývá pouze ${capsuleCount} ${capsuleNoun(capsuleCount)}.`,
-      tone: "warning",
-    });
-  }
+  if (supply) recommendations.push(supply);
   if (isProgramActive(diagnostic, now)) {
     recommendations.push({
       title: "Probíhá mycí cyklus",
@@ -85,14 +75,4 @@ export function buildRecommendations({ authorized, diagnostics, capsuleCount }, 
 
 function renderRecommendation(recommendation) {
   return `<li class="recommendation ${escapeHtml(recommendation.tone)}"><strong>${escapeHtml(recommendation.title)}</strong><span>${escapeHtml(recommendation.text)}</span></li>`;
-}
-
-function capsuleNoun(count) {
-  if (count === 1) {
-    return "tableta";
-  }
-  if (count >= 2 && count <= 4) {
-    return "tablety";
-  }
-  return "tablet";
 }

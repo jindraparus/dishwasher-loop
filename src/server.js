@@ -15,6 +15,7 @@ import { Storage } from "./storage.js";
 import { capsuleSettingsRouter } from "./supplies.js";
 import { buildCycleSummary } from "./cycle-summary.js";
 import { buildCycleAnalytics, CycleAnalyticsInputError, parseCycleAnalyticsOptions } from "./cycle-analytics.js";
+import { buildSupplyForecast } from "./supply-forecast.js";
 
 const config = loadConfig();
 const indexPath = fileURLToPath(new URL("../public/index.html", import.meta.url));
@@ -58,6 +59,7 @@ app.get("/api/dashboard", async (request, response, next) => {
       monitorStatus: monitor.getStatus(),
       diagnostics: monitor.getDiagnostics(),
       capsuleCount,
+      supplyForecast: buildSupplyForecast(allCycles, capsuleCount, monitor.getDiagnostics()),
       cycles: allCycles.slice(0, 20),
       cycleStats: {
         week: buildCycleStats(allCycles, "week", config.cycleTimezone),

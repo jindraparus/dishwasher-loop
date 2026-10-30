@@ -5,6 +5,8 @@ import {
   isProgramActive,
 } from "../../public/lib/program.js";
 import { selectCycleSummary } from "../cycle-summary.js";
+import { validateSupplyForecast } from "../supply-forecast.js";
+import { capsuleState, validInventory } from "../../public/lib/supply.js";
 import { parseCycleAnalyticsOptions, validateCycleAnalytics } from "../cycle-analytics.js";
 
 const LOCAL_TIMEOUT_MS = 5_000;
@@ -139,6 +141,9 @@ export class DashboardClient {
 
 export function buildDishwasherOverview(dashboard, now = Date.now()) {
   validateDashboard(dashboard);
+  const forecast = dashboard.supplyForecast === undefined ? undefined
+    : validateSupplyForecast(dashboard.supplyForecast,
+      validInventory(dashboard.capsuleCount) ? dashboard.capsuleCount : null);
   const recommendations = buildRecommendations(dashboard, now);
 
   return {
@@ -194,9 +199,10 @@ export function buildDishwasherOverview(dashboard, now = Date.now()) {
       };
     }),
     supplies: {
-      dishwasherCapsules: Number.isInteger(dashboard.capsuleCount)
-        ? { state: dashboard.capsuleCount <= 5 ? "low" : "ok", count: dashboard.capsuleCount }
-        : { state: "unknown", count: null },
+      dishwasherCapsules: validInventory(dashboard.capsuleCount)
+        ? { state: capsuleState(dashboard.capsuleCount, forecast), count: dashboard.capsuleCount,
+          ...(forecast ? { forecast } : {}) }
+        : { state: "unknown", count: null, ...(forecast ? { forecast } : {}) },
     },
     recommendations,
   };
