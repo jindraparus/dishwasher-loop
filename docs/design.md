@@ -334,6 +334,18 @@ using shared period-date logic and end at query time; timezone rules determine
 the UTC boundary, with `CYCLE_TIMEZONE` as the default. The API validates options
 and the MCP validates returned analytics and their requested scope/interval.
 
+The dashboard computes `supplyForecast` from all durable cycles and shared
+inventory; overview MCP returns it with the shared dashboard recommendation
+presentation. Forecast processing is deterministic backend code, not agent
+arithmetic. It counts completions (including inferred ones) by finish time over
+up to 28 elapsed days, requiring 7 days and 3 completions, with one tablet per
+completion matching existing stock accounting. Reorder at 7 estimated days
+(3 delivery + 4 buffer); without an estimate, use the labelled <=5 stock fallback.
+Zero stock always triggers replenishment. Unknown coverage, incomplete records
+and gaps are limitations, not evidence of no consumption. MCP validates the
+forecast contract and decision consistency; inventory edits invalidate the old
+forecast until refreshed. The agent communicates actions without purchasing.
+
 In Azure mode, the local process does not instantiate the web service,
 `HomeConnectClient`, `DishwasherMonitor`, or storage. The deployed service
 remains the only Home Connect monitoring channel. Local dishwasher manuals are

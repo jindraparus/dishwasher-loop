@@ -17,7 +17,7 @@ export function renderDashboard(state, { error = "", now = Date.now() } = {}) {
     <main class="dashboard">
       ${renderDiagnosticsCard(diagnostics)}
       ${renderProgramCard(diagnostics, now)}
-      ${renderSuppliesCard(diagnostics, state.capsuleCount)}
+      ${renderSuppliesCard(diagnostics, state.capsuleCount, state.supplyForecast)}
       ${renderRecommendationsCard(state, now)}
       ${renderCycleStatsCard(state.cycleStats)}
       ${renderCyclesCard(state.cycles)}

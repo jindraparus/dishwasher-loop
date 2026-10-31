@@ -190,6 +190,10 @@ test("authenticated summary API uses all durable records and dashboard shares th
   assert.equal(dashboard.cycles.length, 20);
   assert.equal(dashboard.cycleSummary.totalObserved, summary.totalObserved);
   assert.equal(dashboard.cycleSummary.incomplete, 2);
+  assert.equal(dashboard.supplyForecast.scope, "shared-stock-all-appliances");
+  assert.equal(dashboard.supplyForecast.history.totalObserved, 117);
+  assert.equal(dashboard.supplyForecast.inventoryCount, dashboard.capsuleCount);
+  assert.equal(dashboard.supplyForecast.policy.reorderThresholdDays, 7);
   assert.equal((await fetch(`${base}/api/cycles/analytics`)).status, 401);
   assert.equal((await fetch(`${base}/api/cycles/analytics`, {
     headers: { "x-ms-client-principal-id": "not-allowed" },

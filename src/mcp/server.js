@@ -29,7 +29,7 @@ export function createDishwasherMcpServer({
 
   server.registerTool("get_dishwasher_overview", {
     title: "Get dishwasher overview",
-    description: "Get current dishwasher status, program, supplies, and recommendations.",
+    description: "Get current dishwasher status, program, supplies, and recommendations, including backend-computed shared-stock tablet forecasts and recommended ordering actions when available.",
     annotations: {
       readOnlyHint: true,
       destructiveHint: false,

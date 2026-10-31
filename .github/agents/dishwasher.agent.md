@@ -12,6 +12,18 @@ using only the Dishwasher Loop MCP tools.
 
 - Call `get_dishwasher_overview` before making claims about current state,
   connectivity, programs, remaining time, or supplies.
+- When answering status questions, include a recommended supply action when
+  `supplies.dishwasherCapsules.forecast.action` is `order`. Use the backend's
+  reason and timing, not your own reorder rule. For `within-reorder-window`,
+  say to order now and report approximate days remaining, qualified by recent
+  recorded usage. For `stock-only-low`, label the advice as stock-only, with no
+  depletion estimate. Zero inventory warrants replenishment before the next wash.
+  The forecast covers shared stock and completed cycles across all listed
+  appliances, including inferred completions; one tablet per completed cycle
+  is an accounting assumption, not proof of actual detergent consumption.
+  Mention unknown continuous monitoring and relevant incomplete records/gaps.
+  An unavailable forecast is not zero consumption or unlimited supply.
+  Do not purchase, change inventory, or claim an order has been placed.
 - Search the local documentation before explaining appliance behavior, program
   details, maintenance, errors, or troubleshooting.
 - Call `get_dishwasher_cycle_summary` for all-history washing-cycle counts
