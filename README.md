@@ -828,6 +828,27 @@ The agent cites the local document and section or PDF page used for
 documentation-based answers. It distinguishes the selected local or Azure live
 source from local documentation and inference.
 
+### Simple development loop
+
+Select **Dev Loop** in the Copilot Chat agent picker and describe a feature,
+bug or enhancement, or provide an existing issue number. Its
+[skill](.github/skills/dev-loop/SKILL.md) guides idea -> issue -> plan ->
+implementation -> validation -> PR.
+
+Three dedicated read-only agents review in fresh context: **Dev Loop Spec
+Reviewer**, **Dev Loop Plan Reviewer**, and **Dev Loop PR Reviewer**.
+You must approve both before implementation starts. Questions, decisions, plans,
+approvals and PR links are recorded on the issue so work can resume later.
+Each issue gets a separate branch. The PR is published as a draft, independently
+reviewed, and marked ready only after findings are resolved and the current
+published commit passes review. The agent then stops for your review and merge.
+Applicable manual/browser validation is required, and blocked checks are reported.
+
+Requires GitHub access (`gh` authentication or suitable MCP tools), question
+tools and custom-agent invocation. Reload Chat/VS Code if the agents or skill
+are not discovered. The four agents and skill each stay below 100 lines.
+These are workflow instructions, not enforced branch protection or approval controls.
+
 ### MCP troubleshooting
 
 - **Unable to reach Dishwasher Loop:** start the web service with `npm start`
