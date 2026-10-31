@@ -53,6 +53,22 @@ export function formatDate(value) {
   return Number.isNaN(date.valueOf()) ? value : date.toLocaleString("cs-CZ");
 }
 
+export function formatCycleDate(value, now = Date.now()) {
+  const date = new Date(value);
+  const today = new Date(now);
+  if (Number.isNaN(date.valueOf()) || date > today) return formatDate(value);
+  const day = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  today.setHours(0, 0, 0, 0);
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const monday = new Date(today);
+  monday.setDate(monday.getDate() - (monday.getDay() + 6) % 7);
+  const label = day.valueOf() === today.valueOf() ? "Dnes"
+    : day.valueOf() === yesterday.valueOf() ? "Včera"
+      : day >= monday ? date.toLocaleDateString("cs-CZ", { weekday: "long" }) : null;
+  return label ? `${label}, ${date.toLocaleTimeString("cs-CZ")}` : formatDate(value);
+}
+
 export function formatDuration(totalSeconds) {
   const minutes = Math.max(0, Math.ceil(totalSeconds / 60));
   const hours = Math.floor(minutes / 60);
