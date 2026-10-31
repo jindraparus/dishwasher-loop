@@ -1,6 +1,6 @@
 import {
   escapeHtml,
-  formatDate,
+  formatCycleDate,
   formatDuration,
   formatProgramName,
 } from "../lib/format.js";
@@ -34,7 +34,7 @@ export function renderCycleStatsCard(stats = {}) {
   </section>`;
 }
 
-export function renderCyclesCard(cycles = []) {
+export function renderCyclesCard(cycles = [], now = Date.now()) {
   return `<section class="card cycles-card">
     <div class="card-heading">
       <div><p class="eyebrow">Pozorované cykly</p><h2>Historie mytí</h2></div>
@@ -42,21 +42,21 @@ export function renderCyclesCard(cycles = []) {
     </div>
     ${cycles.length === 0
       ? `<p class="empty">Zatím nebyl zaznamenán žádný mycí cyklus.</p>`
-      : `<div class="cycle-list">${cycles.map(renderCycle).join("")}</div>`}
+      : `<div class="cycle-list">${cycles.map((cycle) => renderCycle(cycle, now)).join("")}</div>`}
   </section>`;
 }
 
-function renderCycle(cycle) {
+function renderCycle(cycle, now) {
   const program = cycle.programKey
     ? formatProgramName(cycle.programKey)
     : "Neznámý program";
   const status = cycleStatus(cycle);
   const started = cycle.startedAt
-    ? formatDate(cycle.startedAt)
+    ? formatCycleDate(cycle.startedAt, now)
     : "Začátek nebyl zachycen";
   const finished = cycle.status === "running"
     ? "Právě probíhá"
-    : cycle.finishedAt ? formatDate(cycle.finishedAt) : "Konec nebyl zachycen";
+    : cycle.finishedAt ? formatCycleDate(cycle.finishedAt, now) : "Konec nebyl zachycen";
   const duration = Number.isFinite(cycle.durationSeconds)
     ? formatDuration(cycle.durationSeconds)
     : "Nelze spolehlivě určit";

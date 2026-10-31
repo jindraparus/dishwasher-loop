@@ -511,6 +511,16 @@ Limits must be between 1 and 100. Statistics report completed and incomplete
 records separately and calculate durations only from cycles with trustworthy
 start and finish boundaries.
 
+### Recent history date labels
+
+Washing-history start and finish timestamps use browser-local calendar dates:
+`Dnes, <time>` for today, `Včera, <time>` for yesterday (even Sunday on Monday),
+and lowercase Czech weekday names for earlier days in the current Monday–Sunday
+week. Time formatting includes seconds. Older and future timestamps retain the
+existing full Czech date/time format. Labels update on each dashboard render
+using the existing refresh; events, diagnostics and missing-boundary text are
+unchanged.
+
 ### Usage-based tablet supply recommendations
 
 The dashboard API includes a backend-computed `supplyForecast`. The existing

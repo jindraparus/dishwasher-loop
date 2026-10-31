@@ -20,7 +20,7 @@ export function renderDashboard(state, { error = "", now = Date.now() } = {}) {
       ${renderSuppliesCard(diagnostics, state.capsuleCount, state.supplyForecast)}
       ${renderRecommendationsCard(state, now)}
       ${renderCycleStatsCard(state.cycleStats)}
-      ${renderCyclesCard(state.cycles)}
+      ${renderCyclesCard(state.cycles, now)}
       ${renderEventsCard(events)}
     </main>
   </div>`;
