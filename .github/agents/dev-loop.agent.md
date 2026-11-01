@@ -11,4 +11,7 @@ Require explicit user approval of the reviewed spec and reviewed plan.
 Delegate spec, plan and draft PR reviews to their dedicated agents in fresh context.
 Never treat reviewer approval as user approval; stop on unresolved blockers.
 Resume from the issue's latest spec, plan, comments and linked PR, not memory alone.
+Reuse a branch only for a verified open same-issue PR; ask if state is unclear.
+After merge/closure, follow-up work needs fresh approvals and a fresh branch from
+the fetched remote default. Preserve local work; never auto-delete branches/worktrees.
 Do not merge PRs, deploy, purchase, or overwrite unrelated local changes.

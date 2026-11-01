@@ -7,6 +7,8 @@ description: "Use for feature, bug and enhancement ideas: clarify and review a G
 ## Ground rules
 - Use the current repository; identify its default branch and inspect the worktree.
 - Preserve unrelated changes. Stop if they conflict; never reset or force-push.
+- Preserve local-only commits and branches used by other worktrees; never auto-delete
+  local branches/worktrees. Fetch pruning removes stale remote refs, not local work.
 - GitHub issue body is the spec; issue comments hold decisions, plan and approvals.
 - Do not publish secrets or private data in issues, comments or PRs.
 - Ask clarifying questions with the question tool; wait for answers.
@@ -40,9 +42,17 @@ description: "Use for feature, bug and enhancement ideas: clarify and review a G
 8. Record the answer with the plan URL; stop until approved. Revisions need reapproval.
 
 ## 4. Implement and validate
-1. Fetch the remote. Start an issue-specific branch from the current default branch.
+1. Fetch the remote (prune stale refs if needed); inspect local work and other worktrees.
+   If the local default branch diverges, stop and ask how to reconcile it safely.
+   For new work, start a fresh issue-specific branch from the fetched remote default.
 2. Use `feat/<issue>-<slug>` or `fix/<issue>-<slug>`; never mix issues on one branch.
-3. On resume, reuse that issue's branch/PR; do not discard existing work.
+3. Before resuming an existing branch, verify its linked PR is open and for this issue.
+   Reuse only that open PR's branch. If PR state is missing, ambiguous or unverifiable,
+   or its remote branch was deleted, preserve local work and ask before proceeding.
+   Merged/closed PR branches are not reusable for new commits; follow-up work requires
+   fresh spec/plan approval through the gates above and a fresh branch from the
+   fetched remote default. Preserve leftover changes/commits and ask how to reconcile
+   them; do not silently carry unrelated work onto the new branch.
 4. Follow approved steps with surgical changes and directly related documentation.
 5. If new evidence changes scope or plan, return to the affected review/approval gate.
 6. Run focused existing tests/builds/lints; add regression tests as appropriate.
@@ -52,7 +62,10 @@ description: "Use for feature, bug and enhancement ideas: clarify and review a G
 
 ## 5. Publish, independently review and wait
 1. Commit only issue changes, following repository commit conventions.
-2. Push without force; create a draft PR to the default branch or reuse its existing PR.
+2. Before pushing, verify any existing linked PR is still open for this issue.
+   If merged/closed or unverifiable, stop before pushing and follow step 4.3.
+   Push without force; create a draft PR to the default branch for new work, or reuse
+   only the verified open same-issue PR.
 3. Include `Closes #<issue>`, spec/plan links, summary and validation evidence.
 4. Fetch the complete PR diff and head SHA; pass approved spec/plan and test evidence
    to a fresh Dev Loop PR Reviewer. Post its outcome with that SHA on the PR.
@@ -60,3 +73,5 @@ description: "Use for feature, bug and enhancement ideas: clarify and review a G
 6. Stop on blockers. Only mark the PR ready after a pass for its current published SHA.
 7. Verify remote branch/PR; post its link and results on the issue.
 8. Return the PR URL and limitations. Stop for human review and merge; never merge.
+   GitHub automatically deletes merged head branches in this repository; after merge,
+   start any new work from the fetched remote default, not the old PR branch.

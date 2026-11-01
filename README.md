@@ -847,12 +847,22 @@ implementation -> validation -> PR.
 
 Three dedicated read-only agents review in fresh context: **Dev Loop Spec
 Reviewer**, **Dev Loop Plan Reviewer**, and **Dev Loop PR Reviewer**.
-You must approve both before implementation starts. Questions, decisions, plans,
+You must approve the reviewed spec and reviewed plan before implementation starts.
+Questions, decisions, plans,
 approvals and PR links are recorded on the issue so work can resume later.
 Each issue gets a separate branch. The PR is published as a draft, independently
 reviewed, and marked ready only after findings are resolved and the current
 published commit passes review. The agent then stops for your review and merge.
 Applicable manual/browser validation is required, and blocked checks are reported.
+
+GitHub automatically deletes head branches when PRs merge. Start new issue work on
+a fresh branch from the fetched remote default branch, not an old merged/closed PR
+branch. Resume an existing branch only after verifying its PR is open for the same
+issue. Follow-up work after merge/closure needs fresh spec/plan approvals and a fresh
+branch. If PR state is unclear, a remote branch was deleted, the local default branch
+diverges, or leftover work needs reconciliation, the agent stops and asks. Local
+changes, local-only commits, and branches in other worktrees are preserved; remote
+branch deletion does not authorize automatic local branch/worktree cleanup.
 
 Requires GitHub access (`gh` authentication or suitable MCP tools), question
 tools and custom-agent invocation. Reload Chat/VS Code if the agents or skill
