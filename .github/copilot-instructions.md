@@ -127,3 +127,12 @@ plans/decisions/approvals. Require explicit user approval of both reviewed spec
 and reviewed plan; reviewer approval is not user approval. Use the dedicated
 review agents, issue-specific branches, and a reviewed draft PR. Stop for human
 merge/deployment rather than performing them automatically.
+
+GitHub automatically deletes merged PR head branches. Start new work on a fresh
+issue-specific branch from the fetched remote default branch; do not continue on
+a merged/closed PR branch. Before reusing an existing branch, verify its linked PR
+is still open for the same issue; if state is unclear or the remote branch is gone,
+stop and ask. Follow-up work requires fresh spec/plan approvals. Preserve dirty
+worktrees, local-only commits, and branches used by other worktrees; ask before
+reconciling a diverged local default branch or leftover work. Never automatically
+delete local branches/worktrees or reset/force-push to resolve divergence.
